@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Báscula visual</title>
+<title>Kcalculator</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#E2762E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Báscula visual">
+<meta name="apple-mobile-web-app-title" content="Kcalculator">
 <script>
   (function(){
     try{ document.documentElement.setAttribute('data-theme', localStorage.getItem('bascula-theme') || 'light'); }catch(e){}
@@ -223,16 +223,18 @@
   .week-row .wr-bar-fill{height:100%;background:var(--mango);}
   .stat-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
   /* --- planner --- */
-  .plan-day{background:var(--paper);border:1.5px solid var(--ink);border-radius:3px;padding:12px 14px;margin-bottom:12px;}
-  .plan-day .pd-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-family:Georgia,serif;font-size:15px;}
-  .plan-day .pd-total{font-family:ui-monospace,monospace;font-size:13px;color:var(--mango-dark);font-weight:700;}
-  .plan-slot{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;gap:6px;}
-  .plan-slot:last-child{border-bottom:none;}
-  .ps-label{font-family:ui-monospace,monospace;font-size:10px;color:var(--ink-soft);width:66px;flex-shrink:0;text-transform:uppercase;}
-  .ps-content{flex:1;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .ps-empty{color:var(--ink-soft);font-style:italic;}
-  .ps-kcal{font-family:ui-monospace,monospace;font-weight:600;flex-shrink:0;}
-  .ps-clear{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;flex-shrink:0;padding:2px 4px;}
+  .plan-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:16px;border:1.5px solid var(--ink);border-radius:6px;}
+  .plan-table{border-collapse:collapse;width:max-content;min-width:100%;}
+  .plan-table th, .plan-table td{border:1px solid var(--line);padding:7px 6px;font-size:11px;text-align:center;}
+  .plan-table thead th{background:var(--stone);font-family:ui-monospace,monospace;font-size:10px;color:var(--ink-soft);padding:8px 6px;white-space:nowrap;}
+  .plan-table thead th span{font-weight:400;}
+  .plan-row-label{font-family:ui-monospace,monospace;font-size:9.5px;text-transform:uppercase;color:var(--ink-soft);background:var(--stone);white-space:nowrap;text-align:left;padding-left:8px;}
+  .plan-table td:first-child, .plan-table th:first-child{position:sticky;left:0;z-index:2;min-width:72px;}
+  .plan-cell{min-width:88px;cursor:pointer;background:var(--paper);}
+  .plan-cell.filled{font-size:11px;line-height:1.4;}
+  .plan-cell.empty{color:var(--ink-soft);font-size:16px;}
+  .plan-cell b{font-family:ui-monospace,monospace;color:var(--mango-dark);}
+  .plan-total-cell{font-family:ui-monospace,monospace;font-weight:700;background:var(--stone);}
   /* --- modal --- */
   .modal-overlay{position:fixed;inset:0;background:rgba(43,42,40,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
   .modal-overlay[hidden]{display:none;}
@@ -252,7 +254,7 @@
 <div class="app">
 
   <header>
-    <h1>Báscula visual</h1>
+    <h1>Kcalculator</h1>
     <div style="display:flex;gap:6px;">
       <button id="themeToggleBtn" style="background:none;border:1.5px solid var(--ink);border-radius:3px;padding:5px 8px;cursor:pointer;font-size:14px;color:var(--ink);">🌙</button>
       <button id="settingsBtn" style="background:none;border:1.5px solid var(--ink);border-radius:3px;padding:5px 8px;cursor:pointer;font-size:14px;color:var(--ink);">⚙</button>
@@ -415,6 +417,7 @@
         <div class="pill-group" id="datosSexo" style="margin:0;">
           <button type="button" class="pill" data-val="hombre">Hombre</button>
           <button type="button" class="pill" data-val="mujer">Mujer</button>
+          <button type="button" class="pill" data-val="otro">Otro / prefiero no decirlo</button>
         </div>
       </div>
     </div>
@@ -662,12 +665,23 @@ const ACTIVITY_FACTORS = { sedentario:1.2, ligero:1.375, moderado:1.55, activo:1
 const INTENSITY_KCAL = { suave:250, moderado:500, agresivo:750 };
 
 function computeGoals(p){
-  if (!p || !p.sexo || !p.edad || !p.altura || !p.peso || !p.actividad){
-    return null;
+  if (!p) return null;
+  // Si el usuario ha ajustado el objetivo a mano, ese valor manda siempre.
+  if (p.overrides && p.overrides.kcal){
+    return {
+      kcal: Number(p.overrides.kcal)||0,
+      prot_g: Number(p.overrides.prot_g)||0,
+      carb_g: Number(p.overrides.carb_g)||0,
+      grasa_g: Number(p.overrides.grasa_g)||0,
+      fibra_g: Number(p.overrides.fibra_g)||0,
+      tdee: p.overrides.tdee || null,
+      esManual: true
+    };
   }
+  if (!p.sexo || !p.edad || !p.altura || !p.peso || !p.actividad) return null;
   const edad = Number(p.edad), altura = Number(p.altura), peso = Number(p.peso);
   let bmr = 10*peso + 6.25*altura - 5*edad;
-  bmr += (p.sexo === 'hombre') ? 5 : -161;
+  bmr += (p.sexo === 'hombre') ? 5 : (p.sexo === 'mujer' ? -161 : -78);
   const tdee = bmr * (ACTIVITY_FACTORS[p.actividad] || 1.2);
   let kcal = tdee;
   if (p.objetivo === 'perder') kcal -= (INTENSITY_KCAL[p.intensidad] || 500);
@@ -677,7 +691,7 @@ function computeGoals(p){
   const carb_g = Math.round((kcal*0.40)/4);
   const grasa_g = Math.round((kcal*0.30)/9);
   const fibra_g = Math.round((kcal/1000)*14);
-  return { kcal, prot_g, carb_g, grasa_g, fibra_g, tdee: Math.round(tdee) };
+  return { kcal, prot_g, carb_g, grasa_g, fibra_g, tdee: Math.round(tdee), esManual: false };
 }
 
 /* --- UI de "Mis datos" --- */
@@ -729,18 +743,45 @@ function renderDatosResultado(p){
   }
   el.innerHTML = `
     <div class="goal-box">
-      <h4>Tu objetivo diario</h4>
-      <div class="macro-grid" style="grid-template-columns:repeat(5,1fr);">
-        <div class="macro-box"><div class="mv">${goals.kcal}</div><div class="ml">Kcal</div></div>
-        <div class="macro-box"><div class="mv">${goals.prot_g}g</div><div class="ml">Prot</div></div>
-        <div class="macro-box"><div class="mv">${goals.carb_g}g</div><div class="ml">Carbos</div></div>
-        <div class="macro-box"><div class="mv">${goals.grasa_g}g</div><div class="ml">Grasas</div></div>
-        <div class="macro-box"><div class="mv">${goals.fibra_g}g</div><div class="ml">Fibra</div></div>
+      <h4>Tu objetivo diario ${goals.esManual ? '<span class="confidence" style="margin-left:6px;">ajustado a mano</span>' : ''}</h4>
+      <div class="field-row">
+        <div class="field"><label>Kcal</label><input type="number" id="goalKcal" value="${goals.kcal}"></div>
+        <div class="field"><label>Proteína (g)</label><input type="number" id="goalProt" value="${goals.prot_g}"></div>
       </div>
-      <p class="semaforo-note">Gasto estimado sin ajustar: ${goals.tdee} kcal/día. Estimación orientativa (Mifflin-St Jeor), no sustituye a un profesional.</p>
+      <div class="field-row">
+        <div class="field"><label>Carbohidratos (g)</label><input type="number" id="goalCarb" value="${goals.carb_g}"></div>
+        <div class="field"><label>Grasas (g)</label><input type="number" id="goalGrasa" value="${goals.grasa_g}"></div>
+      </div>
+      <div class="field"><label>Fibra (g)</label><input type="number" id="goalFibra" value="${goals.fibra_g}"></div>
+      <button class="primary" id="goalSaveBtn" style="width:100%;">Guardar este objetivo</button>
+      ${goals.esManual ? `<button class="ghost" id="goalResetBtn" style="width:100%;margin-top:8px;">↺ Volver al cálculo automático</button>` : ''}
+      ${goals.tdee ? `<p class="semaforo-note">Gasto estimado sin ajustar: ${goals.tdee} kcal/día. Estimación orientativa (Mifflin-St Jeor), no sustituye a un profesional.</p>` : `<p class="semaforo-note">Objetivo manual — no calculado por fórmula.</p>`}
     </div>`;
+
+  document.getElementById('goalSaveBtn').addEventListener('click', async () => {
+    const current = await getProfile() || {};
+    current.overrides = {
+      kcal: document.getElementById('goalKcal').value,
+      prot_g: document.getElementById('goalProt').value,
+      carb_g: document.getElementById('goalCarb').value,
+      grasa_g: document.getElementById('goalGrasa').value,
+      fibra_g: document.getElementById('goalFibra').value
+    };
+    await saveProfile(current);
+    renderDatosResultado(current);
+  });
+  const resetBtn = document.getElementById('goalResetBtn');
+  if (resetBtn){
+    resetBtn.addEventListener('click', async () => {
+      const current = await getProfile() || {};
+      delete current.overrides;
+      await saveProfile(current);
+      renderDatosResultado(current);
+    });
+  }
 }
 document.getElementById('datosGuardarBtn').addEventListener('click', async () => {
+  const existing = await getProfile() || {};
   const p = {
     sexo: pillGroupValue('datosSexo'),
     edad: document.getElementById('datosEdad').value,
@@ -749,6 +790,7 @@ document.getElementById('datosGuardarBtn').addEventListener('click', async () =>
     actividad: pillGroupValue('datosActividad'),
     objetivo: pillGroupValue('datosObjetivo'),
     intensidad: pillGroupValue('datosIntensidad'),
+    overrides: existing.overrides
   };
   if (!p.sexo || !p.edad || !p.altura || !p.peso || !p.actividad || !p.objetivo){
     alert('Rellena sexo, edad, altura, peso, actividad y objetivo.');
@@ -837,15 +879,17 @@ function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
   themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
-(function initTheme(){
-  const saved = localStorage.getItem('bascula-theme') || 'light';
-  applyTheme(saved);
+(async function initTheme(){
+  const s = await getSettings();
+  applyTheme(s.theme || 'light');
 })();
-themeToggleBtn.addEventListener('click', () => {
+themeToggleBtn.addEventListener('click', async () => {
   const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   const next = current === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('bascula-theme', next);
   applyTheme(next);
+  const s = await getSettings();
+  s.theme = next;
+  await saveSettings(s);
 });
 
 /* ============================================================
@@ -1186,10 +1230,78 @@ async function refreshDiario(){
   const meals = await loadAllMeals();
   if (diarioView === 'dia'){
     const profile = await getProfile();
-    renderDiaView(meals, computeGoals(profile));
+    const exercises = await loadExerciseForDay(dateKey(diarioRefDate));
+    renderDiaView(meals, computeGoals(profile), exercises);
   }
   else if (diarioView === 'semana') renderSemanaView(meals);
   else renderMesView(meals);
+}
+
+/* ============================================================
+   EJERCICIO FÍSICO
+   ============================================================ */
+const MET_ACTIVITIES = [
+  {val:'caminar', label:'🚶 Caminar', met:3.5},
+  {val:'caminar_rapido', label:'🚶 Caminar rápido', met:4.5},
+  {val:'correr', label:'🏃 Correr', met:8},
+  {val:'ciclismo', label:'🚴 Ciclismo', met:7},
+  {val:'natacion', label:'🏊 Natación', met:6},
+  {val:'pesas', label:'🏋️ Pesas', met:5},
+  {val:'yoga', label:'🧘 Yoga / Pilates', met:3},
+  {val:'equipo', label:'⚽ Deporte de equipo', met:7},
+  {val:'baile', label:'💃 Baile', met:5},
+  {val:'otro', label:'✏️ Otro (kcal a mano)', met:0}
+];
+async function loadExerciseForDay(dayKeyStr){
+  const all = await storageListEntries('exercise:');
+  return all.filter(e => dateKey(new Date(e.timestamp)) === dayKeyStr).sort((a,b)=>a.timestamp-b.timestamp);
+}
+async function openExerciseModal(){
+  const profile = await getProfile();
+  const peso = profile && profile.peso ? Number(profile.peso) : null;
+  let selectedMet = null, selectedLabel = null, manualMode = !peso;
+
+  openModal(`
+    <div class="modal-head"><h3>Añadir ejercicio</h3><button class="modal-close" id="exClose">✕</button></div>
+    <div class="pill-group" id="exActPills">
+      ${MET_ACTIVITIES.map(a => `<button type="button" class="pill" data-val="${a.val}" data-met="${a.met}" data-label="${escapeHtml(a.label)}">${a.label}</button>`).join('')}
+    </div>
+    <div class="field"><label>Minutos</label><input type="number" id="exMinutos" value="30" inputmode="numeric"></div>
+    <div class="field" id="exKcalManualWrap" ${manualMode ? '' : 'hidden'}><label>Kcal quemadas</label><input type="number" id="exKcalManual" inputmode="numeric"></div>
+    <p class="notes" id="exPreview">${peso ? 'Elige una actividad para ver la estimación.' : 'Sin tu peso guardado en "Mis datos" no puedo calcularlo solo — escribe tú las kcal quemadas.'}</p>
+    <button class="primary" id="exAddBtn">Añadir</button>
+  `);
+  document.getElementById('exClose').addEventListener('click', closeModal);
+
+  function updatePreview(){
+    if (manualMode || selectedMet == null || !peso) return;
+    const minutos = parseFloat(document.getElementById('exMinutos').value) || 0;
+    document.getElementById('exPreview').textContent = `Estimado: ${Math.round(selectedMet * peso * (minutos/60))} kcal.`;
+  }
+  document.querySelectorAll('#exActPills .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('#exActPills .pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      selectedMet = parseFloat(p.dataset.met);
+      selectedLabel = p.dataset.label;
+      manualMode = (p.dataset.val === 'otro') || !peso;
+      document.getElementById('exKcalManualWrap').hidden = !manualMode;
+      updatePreview();
+    });
+  });
+  document.getElementById('exMinutos').addEventListener('input', updatePreview);
+
+  document.getElementById('exAddBtn').addEventListener('click', async () => {
+    if (!selectedLabel){ alert('Elige una actividad.'); return; }
+    const minutos = parseFloat(document.getElementById('exMinutos').value) || 0;
+    const kcalQuemadas = manualMode
+      ? (parseFloat(document.getElementById('exKcalManual').value) || 0)
+      : Math.round(selectedMet * peso * (minutos/60));
+    const ts = Date.now();
+    await storageSet(`exercise:${ts}`, { timestamp: ts, actividad: selectedLabel, minutos, kcal_quemadas: kcalQuemadas });
+    closeModal();
+    refreshDiario();
+  });
 }
 
 function renderGoalRow(label, value, target, unit){
@@ -1201,7 +1313,7 @@ function renderGoalRow(label, value, target, unit){
   </div>`;
 }
 
-function renderDiaView(meals, goals){
+function renderDiaView(meals, goals, exercises){
   const key = dateKey(diarioRefDate);
   const dayMeals = meals.filter(m => dateKey(new Date(m.timestamp)) === key);
   const isToday = key === dateKey(new Date());
@@ -1211,6 +1323,9 @@ function renderDiaView(meals, goals){
     acc.carb += m.total_carbohidratos_g||0; acc.grasa += m.total_grasas_g||0; acc.fibra += m.total_fibra_g||0;
     return acc;
   }, {kcal:0,prot:0,carb:0,grasa:0,fibra:0});
+
+  const exerciseTotal = (exercises||[]).reduce((s,e) => s + (e.kcal_quemadas||0), 0);
+  const netKcal = Math.max(0, Math.round(totals.kcal - exerciseTotal));
 
   const label = diarioRefDate.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
 
@@ -1225,6 +1340,22 @@ function renderDiaView(meals, goals){
       </div>`;
   }
 
+  const exerciseHtml = `
+    <div class="card">
+      <h4 style="margin:0 0 8px;font-family:ui-monospace,monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);display:flex;justify-content:space-between;">
+        <span>Ejercicio</span><span>${exerciseTotal ? '−'+Math.round(exerciseTotal)+' kcal' : ''}</span>
+      </h4>
+      ${(exercises && exercises.length) ? exercises.map(e => `
+        <div class="food-row">
+          <div class="food-name">${escapeHtml(e.actividad)}${e.minutos ? ' · '+e.minutos+' min' : ''}</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="food-kcal">−${Math.round(e.kcal_quemadas)} kcal</span>
+            <button class="lr-del" data-key="exercise:${e.timestamp}">✕</button>
+          </div>
+        </div>`).join('') : `<div class="slot-empty">Sin ejercicio registrado hoy</div>`}
+      <button class="ghost" id="addExerciseBtn" style="margin-top:10px;">+ Añadir ejercicio</button>
+    </div>`;
+
   diarioContent.innerHTML = `
     <div class="date-nav">
       <button id="dPrev">‹</button>
@@ -1236,10 +1367,11 @@ function renderDiaView(meals, goals){
       <div class="total-row"><span class="lbl">Total del día</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
       ${renderMacroGrid({total_proteinas_g:totals.prot, total_carbohidratos_g:totals.carb, total_grasas_g:totals.grasa, total_fibra_g:totals.fibra})}
     </div>
+    ${exerciseHtml}
     ${goals ? `
       <div class="goal-box">
         <h4>Objetivo del día</h4>
-        ${renderGoalRow('Kcal', totals.kcal, goals.kcal, '')}
+        ${renderGoalRow('Kcal netas' + (exerciseTotal ? ' (consumidas − ejercicio)' : ''), netKcal, goals.kcal, '')}
         ${renderGoalRow('Proteína', totals.prot, goals.prot_g, 'g')}
         ${renderGoalRow('Carbohidratos', totals.carb, goals.carb_g, 'g')}
         ${renderGoalRow('Grasas', totals.grasa, goals.grasa_g, 'g')}
@@ -1255,6 +1387,10 @@ function renderDiaView(meals, goals){
   document.getElementById('dNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,1); refreshDiario(); });
   const gotoDatos = diarioContent.querySelector('[data-action="goto-datos"]');
   if (gotoDatos) gotoDatos.addEventListener('click', () => showTab('datos'));
+  document.getElementById('addExerciseBtn').addEventListener('click', openExerciseModal);
+  diarioContent.querySelectorAll('.lr-del').forEach(btn => {
+    btn.addEventListener('click', async () => { await storageDelete(btn.dataset.key); refreshDiario(); });
+  });
 }
 
 function renderSemanaView(meals){
@@ -1612,34 +1748,56 @@ async function refreshPlanificador(){
 
 function renderPlanGrid(){
   const slotKeys = ['desayuno','comida','cena','entre_horas'];
-  planContent.innerHTML = currentPlan.dias.map((dia, dayIdx) => {
-    const dayTotal = slotKeys.reduce((s,sk) => s + (dia[sk] ? dia[sk].kcal : 0), 0);
-    return `
-      <div class="plan-day">
-        <div class="pd-head"><span>${dia.diaNombre} <span style="font-size:12px;color:var(--ink-soft);font-family:ui-monospace,monospace;">${dia.fecha.slice(5)}</span></span><span class="pd-total">${dayTotal} kcal</span></div>
-        ${slotKeys.map(sk => {
-          const item = dia[sk];
-          return `
-            <div class="plan-slot">
-              <span class="ps-label">${SLOT_LABELS[sk]}</span>
-              <span class="ps-content ${item ? '' : 'ps-empty'}" data-day="${dayIdx}" data-slot="${sk}">${item ? escapeHtml(item.nombre) : '+ Añadir'}</span>
-              ${item ? `<span class="ps-kcal">${item.kcal} kcal</span><button class="ps-clear" data-day="${dayIdx}" data-slot="${sk}">✕</button>` : ''}
-            </div>`;
-        }).join('')}
-      </div>`;
-  }).join('') + `
-    <div class="card"><div class="total-row"><span class="lbl">Total semana</span><span class="val">${currentPlan.dias.reduce((s,d) => s + slotKeys.reduce((s2,sk) => s2+(d[sk]?d[sk].kcal:0),0), 0)} kcal</span></div></div>
+  const dayTotal = (dayIdx) => slotKeys.reduce((s,sk) => s + (currentPlan.dias[dayIdx][sk] ? currentPlan.dias[dayIdx][sk].kcal : 0), 0);
+  const weekTotal = currentPlan.dias.reduce((s,d,i) => s + dayTotal(i), 0);
+
+  planContent.innerHTML = `
+    <div class="plan-table-wrap">
+      <table class="plan-table">
+        <thead>
+          <tr>
+            <th></th>
+            ${currentPlan.dias.map(d => `<th>${d.diaNombre.slice(0,3)}<br><span>${d.fecha.slice(8)}</span></th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${slotKeys.map(sk => `
+            <tr>
+              <td class="plan-row-label">${SLOT_LABELS[sk]}</td>
+              ${currentPlan.dias.map((dia, dayIdx) => {
+                const item = dia[sk];
+                return `<td class="plan-cell ${item?'filled':'empty'}" data-day="${dayIdx}" data-slot="${sk}">${item ? `${escapeHtml(item.nombre)}<br><b>${item.kcal} kcal</b>` : '+'}</td>`;
+              }).join('')}
+            </tr>`).join('')}
+          <tr>
+            <td class="plan-row-label">Total</td>
+            ${currentPlan.dias.map((d,i) => `<td class="plan-total-cell">${dayTotal(i)} kcal</td>`).join('')}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card"><div class="total-row"><span class="lbl">Total semana</span><span class="val">${weekTotal} kcal</span></div></div>
   `;
 
-  planContent.querySelectorAll('.ps-content').forEach(el => {
-    el.addEventListener('click', () => openSlotPicker(parseInt(el.dataset.day), el.dataset.slot));
-  });
-  planContent.querySelectorAll('.ps-clear').forEach(el => {
-    el.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      currentPlan.dias[parseInt(el.dataset.day)][el.dataset.slot] = null;
-      await storageSet(`plan:${currentPlan.week_start}`, currentPlan);
-      renderPlanGrid();
+  planContent.querySelectorAll('.plan-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const dayIdx = parseInt(cell.dataset.day), slotKey = cell.dataset.slot;
+      const item = currentPlan.dias[dayIdx][slotKey];
+      if (!item){ openSlotPicker(dayIdx, slotKey); return; }
+      openModal(`
+        <div class="modal-head"><h3>${SLOT_LABELS[slotKey]} · ${currentPlan.dias[dayIdx].diaNombre}</h3><button class="modal-close" id="pmClose">✕</button></div>
+        <p class="notes" style="margin-bottom:14px;">${escapeHtml(item.nombre)} — ${item.kcal} kcal</p>
+        <button class="primary" id="pmChange">Cambiar</button>
+        <button class="ghost" id="pmRemove" style="margin-top:8px;">Quitar</button>
+      `);
+      document.getElementById('pmClose').addEventListener('click', closeModal);
+      document.getElementById('pmChange').addEventListener('click', () => openSlotPicker(dayIdx, slotKey));
+      document.getElementById('pmRemove').addEventListener('click', async () => {
+        currentPlan.dias[dayIdx][slotKey] = null;
+        await storageSet(`plan:${currentPlan.week_start}`, currentPlan);
+        renderPlanGrid();
+        closeModal();
+      });
     });
   });
 }

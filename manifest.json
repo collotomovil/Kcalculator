@@ -1,6 +1,6 @@
 {
-  "name": "Báscula visual",
-  "short_name": "Báscula",
+  "name": "Kcalculator",
+  "short_name": "Kcalculator",
   "description": "Calculadora de calorías por foto, diario, ingredientes y planificador personal",
   "start_url": "./index.html",
   "scope": "./",
