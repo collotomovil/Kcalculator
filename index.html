@@ -378,8 +378,9 @@
   <!-- ===================== CALCULADORA ===================== -->
   <div id="tab-calculadora" class="tab-panel">
     <div class="pill-group" id="calcModeToggle">
-      <button class="pill active" data-mode="foto">📷 Foto con IA</button>
-      <button class="pill" data-mode="buscar">🔍 Buscar alimento</button>
+      <button class="pill active" data-mode="foto">📷 Foto</button>
+      <button class="pill" data-mode="texto">✏️ Describir</button>
+      <button class="pill" data-mode="repetir">🔁 Repetir plato</button>
     </div>
 
     <div class="card capture-zone" id="captureCard">
@@ -405,20 +406,37 @@
       </div>
     </div>
 
-    <div class="card" id="searchCard" hidden>
-      <div class="field"><label>Buscar alimento (Open Food Facts)</label><input type="text" id="offSearchInput" placeholder="Ej. yogur natural, arroz…"></div>
-      <button class="primary" id="offSearchBtn">Buscar</button>
+    <div class="card" id="textCard" hidden>
+      <div class="field"><label>Describe lo que has comido</label><textarea id="textDescInput" placeholder="Ej. un plato hondo de arroz con pollo guisado y un poco de aceite"></textarea></div>
+      <button class="primary" id="textAnalyzeBtn">Calcular con IA</button>
+      <div class="loading" id="textLoadingWrap" hidden>Estimando alimentos y nutrientes…<div class="bar"></div></div>
+    </div>
+
+    <div class="card" id="repeatCard" hidden>
+      <div class="field"><label>Buscar en tus platos guardados</label><input type="text" id="repeatSearchInput" placeholder="Ej. arroz con pollo…"></div>
+      <div id="repeatList"></div>
+    </div>
+
+    <div class="card" id="itemsCard" hidden>
+      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Tu plato</h4>
+      <div id="manualItemsWrap"></div>
+      <div class="field" style="margin-top:12px;">
+        <label>+ Añadir otro ingrediente</label>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="offSearchInput" placeholder="Buscar en Open Food Facts…" style="flex:1;">
+          <button class="small-ghost" id="offSearchBtn">Buscar</button>
+        </div>
+      </div>
       <div id="offSearchStatus"></div>
       <div id="offSearchResults"></div>
-      <div id="manualItemsWrap" style="margin-top:14px;"></div>
     </div>
 
     <div id="errorWrapCalc"></div>
     <div class="card" id="resultCard" hidden></div>
 
     <div class="disclaimer">
-      <b>Foto con IA:</b> estimación aproximada por visión artificial (usa tu clave gratuita de Gemini, en Ajustes ⚙). El margen de error puede ser considerable, especialmente en vitaminas y minerales.<br>
-      <b>Buscar alimento:</b> datos reales de productos vía Open Food Facts, sin IA — más preciso si el producto está en su base de datos.
+      <b>Foto / Describir:</b> estimación por IA (tu clave gratuita de Gemini, en Ajustes ⚙). Puedes editar cada ingrediente antes de guardar si algo no cuadra.<br>
+      <b>Repetir plato:</b> reutiliza uno ya guardado, por si hoy has comido lo mismo.
     </div>
   </div>
 
@@ -599,7 +617,7 @@ function defaultDishName(alimentos){
 async function geminiRequest(parts){
   const settings = await getSettings();
   if (!settings.geminiKey) throw new Error('Añade tu clave gratuita de Gemini en Ajustes (⚙, arriba) para usar el reconocimiento por foto.');
-  const model = settings.geminiModel || 'gemini-2.5-flash';
+  const model = settings.geminiModel || 'gemini-3.6-flash';
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -740,7 +758,7 @@ async function storageListEntries(prefix){
 }
 async function getSettings(){
   const s = await storageGet('settings:app');
-  return s || { geminiKey:'', geminiModel:'gemini-2.5-flash' };
+  return s || { geminiKey:'', geminiModel:'gemini-3.6-flash' };
 }
 async function saveSettings(s){ await storageSet('settings:app', s); }
 
@@ -1020,7 +1038,6 @@ const errorWrapCalc = document.getElementById('errorWrapCalc');
 
 let currentBase64 = null;
 let currentMediaType = null;
-let lastAnalysis = null;
 
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
@@ -1055,7 +1072,37 @@ async function buildIngredientsContext(){
   const lines = list.slice(0, 25).map(i =>
     `- ${i.nombre}${i.marca ? ' ('+i.marca+')' : ''}: ${i.kcal_100g||0} kcal/100g, ${i.proteinas_100g||0}g proteína, ${i.carbohidratos_100g||0}g carbohidratos, ${i.grasas_100g||0}g grasa`
   ).join('\n');
-  return `\n\nEl usuario tiene registrados estos ingredientes con datos exactos. Si algún alimento de la foto coincide claramente con uno de ellos, usa su valor nutricional exacto (indícalo en "notas") en vez de estimar a ojo:\n${lines}`;
+  return `\n\nEl usuario tiene registrados estos ingredientes con datos exactos. Si algún alimento coincide claramente con uno de ellos, usa su valor nutricional exacto (indícalo en "notas"):\n${lines}`;
+}
+
+function buildAnalysisPrompt(extra){
+  return `Eres un nutricionista experto en estimar alimentos. Identifica cada alimento por separado, con su cantidad estimada en gramos, y su valor nutricional POR CADA 100 GRAMOS de ese alimento (una tasa, no el total del plato — así se puede recalcular si el usuario ajusta la cantidad después).${extra}
+
+Responde ÚNICAMENTE con JSON válido, sin texto adicional ni markdown, con esta estructura exacta:
+{
+  "alimentos": [{"nombre":"string","cantidad_g":number,"kcal_100g":number,"proteinas_100g":number,"carbohidratos_100g":number,"grasas_100g":number,"fibra_100g":number}],
+  "vitaminas_destacadas": [{"nombre":"string","aporte":"alto|medio|bajo"}],
+  "confianza": "alta|media|baja",
+  "notas": "string breve, 1-2 frases"
+}`;
+}
+
+function applyAnalysisResult(parsed){
+  manualItems = (parsed.alimentos || []).map(a => ({
+    nombre: a.nombre || 'Alimento',
+    gramos: Number(a.cantidad_g) || 100,
+    kcal_100g: Number(a.kcal_100g) || 0,
+    proteinas_100g: Number(a.proteinas_100g) || 0,
+    carbohidratos_100g: Number(a.carbohidratos_100g) || 0,
+    grasas_100g: Number(a.grasas_100g) || 0,
+    fibra_100g: Number(a.fibra_100g) || 0
+  }));
+  analysisMeta = {
+    vitaminas_destacadas: parsed.vitaminas_destacadas || [],
+    confianza: parsed.confianza || null,
+    notas: parsed.notas || ''
+  };
+  renderManualItemsList();
 }
 
 async function analyzePlate(){
@@ -1066,32 +1113,14 @@ async function analyzePlate(){
   analyzeBtn.disabled = true;
 
   const ingredientsContext = await buildIngredientsContext();
-
-  const prompt = `Eres un nutricionista experto en estimar visualmente alimentos. Analiza la foto de este plato de comida.
-
-Identifica cada alimento visible, estima su cantidad en gramos (apóyate en referencias de tamaño habituales: plato estándar ~26cm, cubiertos, vasos) y estima las kcal totales, así como el desglose de macronutrientes (proteínas, carbohidratos, grasas, fibra) del plato completo. Añade también, si es posible, 2-4 vitaminas o minerales destacados con un aporte relativo (alto/medio/bajo) — indica claramente que esto es mucho menos preciso que las kcal.${ingredientsContext}
-
-Responde ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown, con esta estructura exacta:
-{
-  "alimentos": [{"nombre":"string","cantidad_estimada":"string, ej. 150 g","kcal_estimadas":number}],
-  "total_kcal": number,
-  "total_proteinas_g": number,
-  "total_carbohidratos_g": number,
-  "total_grasas_g": number,
-  "total_fibra_g": number,
-  "vitaminas_destacadas": [{"nombre":"string","aporte":"alto|medio|bajo"}],
-  "confianza": "alta|media|baja",
-  "notas": "string breve, 1-2 frases"
-}`;
+  const prompt = buildAnalysisPrompt(`\n\nApóyate en referencias de tamaño habituales (plato estándar ~26cm, cubiertos, vasos) para estimar las cantidades a partir de la foto.${ingredientsContext}`);
 
   try {
     const text = await geminiRequest([
       { text: prompt },
       { inline_data: { mime_type: currentMediaType, data: currentBase64 } }
     ]);
-    const parsed = parseJsonLoose(text);
-    lastAnalysis = parsed;
-    renderCalcResult(parsed);
+    applyAnalysisResult(parseJsonLoose(text));
   } catch (err) {
     console.error(err);
     errorWrapCalc.innerHTML = `<div class="error">No se pudo analizar la foto. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
@@ -1101,11 +1130,37 @@ Responde ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown, con
   }
 }
 
+document.getElementById('textAnalyzeBtn').addEventListener('click', async () => {
+  const desc = document.getElementById('textDescInput').value.trim();
+  if (!desc) return;
+  const loadingEl = document.getElementById('textLoadingWrap');
+  const btn = document.getElementById('textAnalyzeBtn');
+  errorWrapCalc.innerHTML = '';
+  resultCard.hidden = true;
+  loadingEl.hidden = false;
+  btn.disabled = true;
+  const ingredientsContext = await buildIngredientsContext();
+  const prompt = buildAnalysisPrompt(`\n\nEl usuario describe así lo que ha comido: "${desc}". Estima cantidades razonables según raciones habituales en España.${ingredientsContext}`);
+  try {
+    const text = await geminiRequest([{ text: prompt }]);
+    applyAnalysisResult(parseJsonLoose(text));
+  } catch (err) {
+    console.error(err);
+    errorWrapCalc.innerHTML = `<div class="error">No se pudo calcular. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
+  } finally {
+    loadingEl.hidden = true;
+    btn.disabled = false;
+  }
+});
+
 /* --- modo: buscar alimento (Open Food Facts, sin IA) --- */
 const calcModeToggle = document.getElementById('calcModeToggle');
 const captureCard = document.getElementById('captureCard');
-const searchCard = document.getElementById('searchCard');
+const textCard = document.getElementById('textCard');
+const repeatCard = document.getElementById('repeatCard');
 let manualItems = [];
+let analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
+let repeatedMealFoto = '';
 
 calcModeToggle.addEventListener('click', (e) => {
   const btn = e.target.closest('.pill');
@@ -1114,10 +1169,69 @@ calcModeToggle.addEventListener('click', (e) => {
   btn.classList.add('active');
   const mode = btn.dataset.mode;
   captureCard.hidden = mode !== 'foto';
-  searchCard.hidden = mode !== 'buscar';
+  textCard.hidden = mode !== 'texto';
+  repeatCard.hidden = mode !== 'repetir';
   resultCard.hidden = true;
   errorWrapCalc.innerHTML = '';
+  if (mode === 'repetir') renderRepeatList();
 });
+
+document.getElementById('repeatSearchInput').addEventListener('input', renderRepeatList);
+
+function parseGramsFromText(text){
+  const m = String(text || '').match(/[\d.,]+/);
+  if (!m) return 100;
+  return parseFloat(m[0].replace(',', '.')) || 100;
+}
+function mealToManualItems(meal){
+  const totalKcalOriginal = (meal.alimentos || []).reduce((s,a) => s + (a.kcal_estimadas || 0), 0) || 1;
+  return (meal.alimentos || []).map(a => {
+    const gramos = parseGramsFromText(a.cantidad_estimada);
+    const kcal = a.kcal_estimadas || 0;
+    const share = kcal / totalKcalOriginal;
+    const factor = gramos ? 100 / gramos : 1;
+    return {
+      nombre: a.nombre,
+      gramos,
+      kcal_100g: Math.round(kcal * factor),
+      proteinas_100g: Math.round((meal.total_proteinas_g || 0) * share * factor * 10) / 10,
+      carbohidratos_100g: Math.round((meal.total_carbohidratos_g || 0) * share * factor * 10) / 10,
+      grasas_100g: Math.round((meal.total_grasas_g || 0) * share * factor * 10) / 10,
+      fibra_100g: Math.round((meal.total_fibra_g || 0) * share * factor * 10) / 10
+    };
+  });
+}
+async function renderRepeatList(){
+  const query = document.getElementById('repeatSearchInput').value.trim().toLowerCase();
+  const meals = await loadAllMeals();
+  const seen = new Set();
+  const unique = meals.filter(m => { if (seen.has(m.nombre)) return false; seen.add(m.nombre); return true; });
+  const filtered = query ? unique.filter(m => m.nombre.toLowerCase().includes(query)) : unique.slice(0, 30);
+  const listEl = document.getElementById('repeatList');
+  if (!filtered.length){
+    listEl.innerHTML = `<div class="empty-state">${query ? 'Sin resultados.' : 'Aún no tienes platos guardados.'}</div>`;
+    return;
+  }
+  listEl.innerHTML = filtered.map(m => `
+    <div class="list-row" data-key="${m.key}" style="cursor:pointer;">
+      <div class="lr-left">
+        ${thumbOrPlaceholder(m.foto, '🍽️')}
+        <div class="lr-info">
+          <div class="lr-title">${escapeHtml(m.nombre)}</div>
+          <div class="lr-sub">${m.total_kcal} kcal</div>
+        </div>
+      </div>
+    </div>`).join('');
+  listEl.querySelectorAll('.list-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const meal = filtered.find(m => m.key === row.dataset.key);
+      manualItems = mealToManualItems(meal);
+      analysisMeta = { vitaminas_destacadas: meal.vitaminas_destacadas || [], confianza: meal.confianza || null, notas: 'Repetido desde un plato guardado — revisa las cantidades por si hoy han sido distintas.' };
+      repeatedMealFoto = meal.foto || '';
+      renderManualItemsList();
+    });
+  });
+}
 
 document.getElementById('offSearchBtn').addEventListener('click', searchOffFood);
 document.getElementById('offSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchOffFood(); });
@@ -1168,25 +1282,53 @@ function openGramsModal(product){
   });
 }
 
+function openEditItemModal(index){
+  const item = manualItems[index];
+  openModal(`
+    <div class="modal-head"><h3>Editar ingrediente</h3><button class="modal-close" id="eiClose">✕</button></div>
+    <div class="field"><label>Nombre</label><input type="text" id="eiNombre" value="${escapeHtml(item.nombre)}"></div>
+    <div class="field"><label>Cantidad (g)</label><input type="number" id="eiGramos" value="${item.gramos}" inputmode="decimal"></div>
+    <div class="field"><label>Kcal / 100g</label><input type="number" id="eiKcal100" value="${item.kcal_100g}" inputmode="decimal"></div>
+    <button class="primary" id="eiSaveBtn">Guardar cambios</button>
+  `);
+  document.getElementById('eiClose').addEventListener('click', closeModal);
+  document.getElementById('eiSaveBtn').addEventListener('click', () => {
+    manualItems[index] = {
+      ...item,
+      nombre: document.getElementById('eiNombre').value.trim() || item.nombre,
+      gramos: parseFloat(document.getElementById('eiGramos').value) || item.gramos,
+      kcal_100g: parseFloat(document.getElementById('eiKcal100').value) || item.kcal_100g
+    };
+    closeModal();
+    renderManualItemsList();
+  });
+}
+
 function renderManualItemsList(){
   const wrap = document.getElementById('manualItemsWrap');
+  document.getElementById('itemsCard').hidden = manualItems.length === 0;
   if (!manualItems.length){ wrap.innerHTML = ''; return; }
   const totalKcal = manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0);
   wrap.innerHTML = `
-    <div class="card">
-      ${manualItems.map((i, idx) => `
-        <div class="food-row">
-          <div><div class="food-name">${escapeHtml(i.nombre)}</div><div class="food-meta">${i.gramos} g</div></div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
-            <button class="lr-del" data-idx="${idx}">✕</button>
-          </div>
-        </div>`).join('')}
-      <div class="total-row"><span class="lbl">Total</span><span class="val">${Math.round(totalKcal)} kcal</span></div>
-      <button class="primary" id="finishManualBtn" style="margin-top:12px;">Terminar y guardar</button>
-    </div>`;
-  wrap.querySelectorAll('.lr-del').forEach(btn => {
+    ${manualItems.map((i, idx) => `
+      <div class="food-row">
+        <div style="cursor:pointer;" data-action="edit" data-idx="${idx}">
+          <div class="food-name">${escapeHtml(i.nombre)} <span style="opacity:.5;">✏️</span></div>
+          <div class="food-meta">${i.gramos} g</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
+          <button class="lr-del" data-action="remove" data-idx="${idx}">✕</button>
+        </div>
+      </div>`).join('')}
+    <div class="total-row"><span class="lbl">Total</span><span class="val">${Math.round(totalKcal)} kcal</span></div>
+    <button class="primary" id="finishManualBtn" style="margin-top:12px;">Continuar</button>
+  `;
+  wrap.querySelectorAll('[data-action="remove"]').forEach(btn => {
     btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx),1); renderManualItemsList(); });
+  });
+  wrap.querySelectorAll('[data-action="edit"]').forEach(el => {
+    el.addEventListener('click', () => openEditItemModal(parseInt(el.dataset.idx)));
   });
   document.getElementById('finishManualBtn').addEventListener('click', finishManualEntry);
 }
@@ -1195,7 +1337,7 @@ function finishManualEntry(){
   const parsed = {
     alimentos: manualItems.map(i => ({
       nombre: i.nombre,
-      cantidad_estimada: `${i.gramos} g`,
+      cantidad_estimada: `${Math.round(i.gramos)} g`,
       kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
     })),
     total_kcal: manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0),
@@ -1203,14 +1345,17 @@ function finishManualEntry(){
     total_carbohidratos_g: manualItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0),
     total_grasas_g: manualItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0),
     total_fibra_g: manualItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0),
-    foto: (manualItems[0] && manualItems[0].foto) || '',
-    vitaminas_destacadas: [],
-    confianza: 'alta',
-    notas: 'Calculado a partir de datos reales de Open Food Facts (sin IA).'
+    foto: (manualItems[0] && manualItems[0].foto) || repeatedMealFoto || '',
+    vitaminas_destacadas: analysisMeta.vitaminas_destacadas,
+    confianza: analysisMeta.confianza || 'alta',
+    notas: analysisMeta.notas || 'Cantidades y alimentos ajustados manualmente antes de guardar.'
   };
   renderCalcResult(parsed);
   manualItems = [];
+  analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
+  repeatedMealFoto = '';
   document.getElementById('manualItemsWrap').innerHTML = '';
+  document.getElementById('itemsCard').hidden = true;
   document.getElementById('offSearchResults').innerHTML = '';
   document.getElementById('offSearchInput').value = '';
 }
@@ -2073,7 +2218,8 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
     <div class="modal-head"><h3>Ajustes</h3><button class="modal-close" id="sClose">✕</button></div>
     <div class="notes" style="margin-bottom:14px;">Necesitas una clave gratuita de Gemini para el reconocimiento de fotos por IA. Consíguela en <b>aistudio.google.com/apikey</b> (gratis, sin tarjeta). Si prefieres no usar IA, puedes dejar esto vacío y usar siempre "Buscar alimento" en la Calculadora.</div>
     <div class="field"><label>Clave de la API de Gemini</label><input type="password" id="sGeminiKey" value="${escapeHtml(s.geminiKey||'')}" placeholder="AIza…"></div>
-    <div class="field"><label>Modelo (opcional, por si Google cambia el nombre)</label><input type="text" id="sGeminiModel" value="${escapeHtml(s.geminiModel||'gemini-2.5-flash')}"></div>
+    <div class="field"><label>Modelo (opcional, por si Google cambia el nombre)</label><input type="text" id="sGeminiModel" value="${escapeHtml(s.geminiModel||'gemini-3.6-flash')}"></div>
+    <p class="notes" style="margin-top:-6px;margin-bottom:14px;">Por defecto uso <b>gemini-3.6-flash</b> (gratis, estable). Si quieres probar el modelo más nuevo de Google, escribe <b>gemini-3.7-flash</b> aquí — es más capaz y también tiene uso gratuito, pero al ser tan reciente su límite diario gratuito puede ser más estricto y cambiar sin aviso.</p>
     <button class="primary" id="sSaveBtn">Guardar</button>
     <div id="sSaveStatus"></div>
 
@@ -2091,7 +2237,7 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
     await saveSettings({
       ...s,
       geminiKey: document.getElementById('sGeminiKey').value.trim(),
-      geminiModel: document.getElementById('sGeminiModel').value.trim() || 'gemini-2.5-flash'
+      geminiModel: document.getElementById('sGeminiModel').value.trim() || 'gemini-3.6-flash'
     });
     document.getElementById('sSaveStatus').innerHTML = `<div class="info-msg">Guardado ✓</div>`;
   });
