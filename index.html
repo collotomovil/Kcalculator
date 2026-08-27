@@ -417,7 +417,6 @@
         <div class="pill-group" id="datosSexo" style="margin:0;">
           <button type="button" class="pill" data-val="hombre">Hombre</button>
           <button type="button" class="pill" data-val="mujer">Mujer</button>
-          <button type="button" class="pill" data-val="otro">Otro / prefiero no decirlo</button>
         </div>
       </div>
     </div>
@@ -614,9 +613,14 @@ function parseJsonLoose(text){
 function hasClaudeStorage(){ return typeof window.storage !== 'undefined' && window.storage && typeof window.storage.set === 'function'; }
 async function storageSet(key, value){
   try{
-    if (hasClaudeStorage()) await window.storage.set(key, JSON.stringify(value), false);
-    else localStorage.setItem(key, JSON.stringify(value));
-  }catch(e){ console.error('storage.set', e); }
+    if (hasClaudeStorage()){
+      const result = await window.storage.set(key, JSON.stringify(value), false);
+      if (!result){ console.error('storage.set: la plataforma devolvió fallo', key); return false; }
+      return true;
+    }
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  }catch(e){ console.error('storage.set', key, e); return false; }
 }
 async function storageGet(key){
   try{
@@ -1147,7 +1151,7 @@ function renderCalcResult(parsed){
     let fotoFinal = '';
     try{
       if (currentBase64 && preview.src){
-        fotoFinal = await makeThumbnail(preview.src, 300);
+        fotoFinal = await makeThumbnail(preview.src, 220);
       } else if (parsed.foto){
         fotoFinal = parsed.foto;
       }
@@ -1168,7 +1172,22 @@ function renderCalcResult(parsed){
       confianza: parsed.confianza || null,
       notas: parsed.notas || ''
     };
-    await storageSet(`meals:${entry.timestamp}`, entry);
+    let saveOk = await storageSet(`meals:${entry.timestamp}`, entry);
+
+    if (!saveOk && entry.foto){
+      // probablemente la foto ha hecho que el registro sea demasiado grande: reintentamos sin ella
+      // para no perder el resto de datos del plato.
+      const entrySinFoto = { ...entry, foto: '' };
+      saveOk = await storageSet(`meals:${entry.timestamp}`, entrySinFoto);
+      if (saveOk) entry.foto = '';
+    }
+
+    if (!saveOk){
+      btn.disabled = false;
+      btn.textContent = 'Guardar en el diario';
+      errorWrapCalc.innerHTML = `<div class="error">No se pudo guardar el plato — el almacenamiento podría estar lleno. Prueba a borrar algún plato antiguo con foto en "Mis platos" (las fotos ocupan más espacio) y vuelve a intentarlo. También puedes hacer una copia de seguridad desde Ajustes ⚙ antes de que pase esto.</div>`;
+      return;
+    }
 
     const allMeals = await loadAllMeals();
     const todayKey = dateKey(new Date(entry.timestamp));
@@ -1180,7 +1199,7 @@ function renderCalcResult(parsed){
     const msg = document.createElement('p');
     msg.className = 'semaforo-note';
     msg.style.marginTop = '8px';
-    msg.textContent = `Añadido a ${SLOT_LABELS[selectedSlot]}${esHoy ? ' de hoy' : ''} (${sameSlotToday.length} registro${sameSlotToday.length===1?'':'s'}, ${Math.round(slotTotalKcal)} kcal en total).`;
+    msg.textContent = `Añadido a ${SLOT_LABELS[selectedSlot]}${esHoy ? ' de hoy' : ''} (${sameSlotToday.length} registro${sameSlotToday.length===1?'':'s'}, ${Math.round(slotTotalKcal)} kcal en total).${(!entry.foto && fotoFinal) ? ' (Se guardó sin la foto: no había espacio suficiente.)' : ''}`;
     btn.insertAdjacentElement('afterend', msg);
 
     const newPhotoBtn = document.createElement('button');
@@ -1202,7 +1221,7 @@ function makeThumbnail(dataUrl, maxDim){
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
     };
     img.onerror = reject;
     img.src = dataUrl;
@@ -1899,6 +1918,45 @@ async function generateAiWeekPlan(){
 /* ============================================================
    AJUSTES
    ============================================================ */
+/* ============================================================
+   COPIA DE SEGURIDAD (exportar / importar)
+   ============================================================ */
+async function exportBackup(){
+  const prefixes = ['meals:', 'ingredients:', 'plan:', 'exercise:'];
+  const data = { version: 1, exportedAt: new Date().toISOString(), entries: {}, singles: {} };
+  for (const prefix of prefixes){
+    const list = await storageListEntries(prefix);
+    data.entries[prefix] = list.map(({key, ...rest}) => ({ key, value: rest }));
+  }
+  data.singles['profile:datos'] = await storageGet('profile:datos');
+  data.singles['settings:app'] = await storageGet('settings:app');
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kcalculator-backup-${dateKey(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+async function importBackup(file){
+  const text = await file.text();
+  const data = JSON.parse(text);
+  let count = 0;
+  for (const prefix of Object.keys(data.entries || {})){
+    for (const item of data.entries[prefix]){
+      const ok = await storageSet(item.key, item.value);
+      if (ok) count++;
+    }
+  }
+  for (const key of Object.keys(data.singles || {})){
+    if (data.singles[key]) await storageSet(key, data.singles[key]);
+  }
+  return count;
+}
+
 document.getElementById('settingsBtn').addEventListener('click', async () => {
   const s = await getSettings();
   openModal(`
@@ -1908,14 +1966,43 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
     <div class="field"><label>Modelo (opcional, por si Google cambia el nombre)</label><input type="text" id="sGeminiModel" value="${escapeHtml(s.geminiModel||'gemini-2.5-flash')}"></div>
     <button class="primary" id="sSaveBtn">Guardar</button>
     <div id="sSaveStatus"></div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
+      <h3 style="font-size:15px;margin:0 0 8px;">Copia de seguridad</h3>
+      <p class="notes" style="margin-bottom:12px;">Descarga un archivo con todos tus platos, ingredientes, planes y datos. Guárdalo donde quieras (email, Drive...) y podrás restaurarlo si algo se borra o cambias de móvil.</p>
+      <button class="ghost" id="sExportBtn">⬇️ Descargar copia de seguridad</button>
+      <input type="file" id="sImportFile" accept="application/json" hidden>
+      <button class="ghost" id="sImportBtn" style="margin-top:8px;">⬆️ Restaurar desde un archivo</button>
+      <div id="sBackupStatus"></div>
+    </div>
   `);
   document.getElementById('sClose').addEventListener('click', closeModal);
   document.getElementById('sSaveBtn').addEventListener('click', async () => {
     await saveSettings({
+      ...s,
       geminiKey: document.getElementById('sGeminiKey').value.trim(),
       geminiModel: document.getElementById('sGeminiModel').value.trim() || 'gemini-2.5-flash'
     });
     document.getElementById('sSaveStatus').innerHTML = `<div class="info-msg">Guardado ✓</div>`;
+  });
+  document.getElementById('sExportBtn').addEventListener('click', async () => {
+    document.getElementById('sBackupStatus').innerHTML = `<div class="loading">Preparando archivo…<div class="bar"></div></div>`;
+    await exportBackup();
+    document.getElementById('sBackupStatus').innerHTML = `<div class="info-msg">Descargado ✓</div>`;
+  });
+  document.getElementById('sImportBtn').addEventListener('click', () => document.getElementById('sImportFile').click());
+  document.getElementById('sImportFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!confirm('Esto va a sobrescribir los datos que coincidan con los del archivo. ¿Continuar?')) return;
+    document.getElementById('sBackupStatus').innerHTML = `<div class="loading">Restaurando…<div class="bar"></div></div>`;
+    try{
+      const count = await importBackup(file);
+      document.getElementById('sBackupStatus').innerHTML = `<div class="info-msg">Restaurados ${count} registros ✓. Cambia de pestaña y vuelve para verlos.</div>`;
+    }catch(err){
+      console.error(err);
+      document.getElementById('sBackupStatus').innerHTML = `<div class="error">No se pudo leer el archivo. ¿Es una copia de seguridad válida?</div>`;
+    }
   });
 });
 

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kcalculator — comparador de estilos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&family=Nunito:wght@500;700;800&family=Fredoka:wght@500;600&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:sans-serif;background:#fff;}
+  .switcher{
+    position:sticky;top:0;z-index:20;display:flex;background:#222;padding:8px;gap:8px;
+  }
+  .switcher button{
+    flex:1;padding:10px;border:none;border-radius:10px;background:#3a3a3a;color:#aaa;font-weight:700;cursor:pointer;font-size:13px;
+  }
+  .switcher button.active{background:#fff;color:#222;}
+  .stage{display:none;max-width:420px;margin:0 auto;padding:24px 16px 60px;min-height:100vh;}
+  .stage.active{display:block;}
+  .label-tag{font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.55;margin-bottom:4px;display:block;}
+
+  /* ================= ESTILO A: RECREO (sticker/cómic) ================= */
+  #stageA{background:#EAF4FB;font-family:'Nunito',sans-serif;color:#2B3A4A;}
+  #stageA h1{font-family:'Comic Neue',cursive;font-weight:700;font-size:30px;margin:0 0 4px;color:#2B3A4A;}
+  #stageA .sub{font-size:13px;opacity:.6;margin-bottom:18px;}
+  #stageA .navA{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;}
+  #stageA .navA button{
+    flex-shrink:0;padding:9px 14px;border-radius:16px;border:3px solid #2B3A4A;background:#fff;
+    font-family:'Comic Neue',cursive;font-weight:700;font-size:13px;color:#2B3A4A;cursor:pointer;box-shadow:3px 3px 0 #2B3A4A;
+  }
+  #stageA .navA button.on{background:#FF6B5B;color:#fff;transform:translate(-2px,-2px);box-shadow:5px 5px 0 #2B3A4A;}
+  #stageA .card{
+    background:#fff;border:3px solid #2B3A4A;border-radius:22px;padding:18px;margin-bottom:16px;box-shadow:5px 5px 0 #2B3A4A;
+  }
+  #stageA .food-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:2px dashed #dfe8ee;font-weight:700;font-size:14px;}
+  #stageA .food-row:last-child{border-bottom:none;}
+  #stageA .total{display:flex;justify-content:space-between;margin-top:8px;padding-top:12px;border-top:3px solid #2B3A4A;font-family:'Comic Neue',cursive;font-weight:700;font-size:23px;color:#FF6B5B;}
+  #stageA .goal-bar-track{height:14px;background:#EAF4FB;border:2px solid #2B3A4A;border-radius:10px;overflow:hidden;margin-top:6px;}
+  #stageA .goal-bar-fill{height:100%;background:#7BC67E;}
+  #stageA .goal-row{margin-bottom:12px;}
+  #stageA .goal-top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;margin-bottom:2px;}
+  #stageA .btn-primary{
+    width:100%;padding:14px;border-radius:18px;border:3px solid #2B3A4A;background:#FFC93C;color:#2B3A4A;
+    font-family:'Comic Neue',cursive;font-weight:700;font-size:16px;box-shadow:4px 4px 0 #2B3A4A;cursor:pointer;transition:transform .08s;
+  }
+  #stageA .btn-primary:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #2B3A4A;}
+  #stageA .btn-ghost{
+    width:100%;margin-top:10px;padding:11px;border-radius:18px;border:3px solid #2B3A4A;background:#fff;color:#2B3A4A;
+    font-family:'Comic Neue',cursive;font-weight:700;font-size:14px;cursor:pointer;
+  }
+  #stageA input{
+    width:100%;padding:11px 14px;border-radius:16px;border:3px solid #2B3A4A;font-family:'Nunito',sans-serif;font-weight:700;font-size:14px;margin-top:6px;
+  }
+  #stageA .sem{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:13px;margin-top:10px;}
+  #stageA .dot{width:20px;height:20px;border-radius:50%;border:2.5px solid #2B3A4A;background:#7BC67E;}
+
+  /* ================= ESTILO B: NUBE (soft/blob) ================= */
+  #stageB{background:linear-gradient(160deg,#F1EBFF,#E8F7F0);font-family:'Quicksand',sans-serif;color:#3B3556;position:relative;overflow:hidden;}
+  #stageB h1{font-family:'Fredoka',sans-serif;font-size:27px;margin:0 0 4px;font-weight:600;}
+  #stageB .sub{font-size:13px;opacity:.55;margin-bottom:18px;}
+  #stageB .navB{display:flex;gap:6px;margin-bottom:20px;background:#fff;border-radius:24px;padding:5px;box-shadow:0 6px 18px rgba(90,70,150,.12);}
+  #stageB .navB button{
+    flex:1;padding:9px 6px;border:none;border-radius:20px;background:transparent;font-family:'Fredoka',sans-serif;font-size:11px;color:#8b84a8;cursor:pointer;transition:all .25s cubic-bezier(.34,1.56,.64,1);
+  }
+  #stageB .navB button.on{background:linear-gradient(135deg,#B39CFF,#8F7BFF);color:#fff;transform:scale(1.06);box-shadow:0 4px 10px rgba(143,123,255,.4);}
+  #stageB .card{
+    background:#fff;border:none;border-radius:28px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(90,70,150,.10);
+  }
+  #stageB .food-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #F1EEFA;font-weight:600;font-size:14px;}
+  #stageB .food-row:last-child{border-bottom:none;}
+  #stageB .total{display:flex;justify-content:space-between;margin-top:10px;padding-top:14px;border-top:none;font-family:'Fredoka',sans-serif;font-size:21px;background:linear-gradient(135deg,#8F7BFF,#5FC9C0);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  #stageB .goal-bar-track{height:12px;background:#F1EEFA;border-radius:20px;overflow:hidden;margin-top:6px;}
+  #stageB .goal-bar-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#8F7BFF,#5FC9C0);}
+  #stageB .goal-row{margin-bottom:14px;}
+  #stageB .goal-top{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;margin-bottom:3px;}
+  #stageB .btn-primary{
+    width:100%;padding:15px;border-radius:24px;border:none;background:linear-gradient(135deg,#B39CFF,#8F7BFF);color:#fff;
+    font-family:'Fredoka',sans-serif;font-size:15px;box-shadow:0 8px 20px rgba(143,123,255,.4);cursor:pointer;transition:transform .2s cubic-bezier(.34,1.56,.64,1);
+  }
+  #stageB .btn-primary:active{transform:scale(.96);}
+  #stageB .btn-ghost{
+    width:100%;margin-top:10px;padding:12px;border-radius:24px;border:2px solid #E4DDFB;background:#fff;color:#8F7BFF;
+    font-family:'Fredoka',sans-serif;font-size:13px;cursor:pointer;
+  }
+  #stageB input{
+    width:100%;padding:12px 16px;border-radius:20px;border:2px solid #E4DDFB;font-family:'Quicksand',sans-serif;font-weight:600;font-size:14px;margin-top:6px;background:#FAF9FF;
+  }
+  #stageB .sem{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:13px;margin-top:10px;}
+  #stageB .dot{width:20px;height:20px;border-radius:50%;background:#6FCF97;box-shadow:0 3px 8px rgba(111,207,151,.5);}
+  #stageB .blob{position:absolute;border-radius:50%;filter:blur(2px);opacity:.35;z-index:0;}
+</style>
+</head>
+<body>
+
+<div class="switcher">
+  <button class="active" data-target="stageA">Estilo A · Recreo</button>
+  <button data-target="stageB">Estilo B · Nube</button>
+</div>
+
+<!-- ESTILO A -->
+<div id="stageA" class="stage active">
+  <span class="label-tag">Kcalculator</span>
+  <h1>¡Hola! 👋</h1>
+  <div class="sub">Cómic / pegatina — bordes gruesos, sombra sólida desplazada</div>
+
+  <div class="navA">
+    <button class="on">📷 Calc</button>
+    <button>📓 Diario</button>
+    <button>🍽️ Platos</button>
+    <button>🥕 Ingr.</button>
+    <button>🗓️ Plan</button>
+    <button>🙋 Datos</button>
+  </div>
+
+  <div class="card">
+    <div class="food-row"><span>Arroz con pollo</span><span>420 kcal</span></div>
+    <div class="food-row"><span>Ensalada verde</span><span>90 kcal</span></div>
+    <div class="total"><span>Total</span><span>510 kcal</span></div>
+    <div class="sem"><span class="dot"></span> Nutri-Score B</div>
+  </div>
+
+  <div class="card">
+    <div class="goal-row">
+      <div class="goal-top"><span>Kcal netas</span><span>1420 / 2100</span></div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:68%"></div></div>
+    </div>
+    <input placeholder="Nombre del plato" value="Arroz con pollo">
+    <button class="btn-primary">¡Guardar plato! 🎉</button>
+    <button class="btn-ghost">Nueva foto</button>
+  </div>
+</div>
+
+<!-- ESTILO B -->
+<div id="stageB" class="stage">
+  <div class="blob" style="width:180px;height:180px;background:#B39CFF;top:-60px;right:-60px;"></div>
+  <div class="blob" style="width:140px;height:140px;background:#5FC9C0;bottom:10%;left:-50px;"></div>
+  <span class="label-tag" style="position:relative;">Kcalculator</span>
+  <h1 style="position:relative;">Hola ✨</h1>
+  <div class="sub" style="position:relative;">Nube / blando — sombras difusas, degradados, rebote suave</div>
+
+  <div class="navB" style="position:relative;">
+    <button class="on">📷 Calc</button>
+    <button>📓 Diario</button>
+    <button>🍽️ Platos</button>
+    <button>🥕 Ingr.</button>
+    <button>🗓️ Plan</button>
+    <button>🙋 Datos</button>
+  </div>
+
+  <div class="card" style="position:relative;">
+    <div class="food-row"><span>Arroz con pollo</span><span>420 kcal</span></div>
+    <div class="food-row"><span>Ensalada verde</span><span>90 kcal</span></div>
+    <div class="total"><span>Total</span><span>510 kcal</span></div>
+    <div class="sem"><span class="dot"></span> Nutri-Score B</div>
+  </div>
+
+  <div class="card" style="position:relative;">
+    <div class="goal-row">
+      <div class="goal-top"><span>Kcal netas</span><span>1420 / 2100</span></div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:68%"></div></div>
+    </div>
+    <input placeholder="Nombre del plato" value="Arroz con pollo">
+    <button class="btn-primary">Guardar plato</button>
+    <button class="btn-ghost">Nueva foto</button>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.switcher button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.switcher button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'));
+    document.getElementById(btn.dataset.target).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
