@@ -379,8 +379,18 @@
   <div id="tab-calculadora" class="tab-panel">
     <div class="pill-group" id="calcModeToggle">
       <button class="pill active" data-mode="foto">📷 Foto</button>
-      <button class="pill" data-mode="texto">✏️ Describir</button>
+      <button class="pill" data-mode="texto">✏️ Descripción</button>
       <button class="pill" data-mode="repetir">🔁 Repetir plato</button>
+    </div>
+
+    <div class="card" id="platoTipoCard" style="padding:12px 16px;">
+      <label style="display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;font-family:ui-monospace,monospace;text-transform:uppercase;">¿Qué plato usas hoy?</label>
+      <div class="pill-group" id="platoTipoPills" style="margin:0 0 8px;">
+        <button type="button" class="pill active" data-val="">Sin especificar</button>
+        <button type="button" class="pill" data-val="llano">🍽️ Llano</button>
+        <button type="button" class="pill" data-val="hondo">🥣 Hondo</button>
+      </div>
+      <button class="ghost" id="openCalibBtn" style="margin-top:0;">⚖️ Calibrar mis platos</button>
     </div>
 
     <div class="card capture-zone" id="captureCard">
@@ -435,7 +445,7 @@
     <div class="card" id="resultCard" hidden></div>
 
     <div class="disclaimer">
-      <b>Foto / Describir:</b> estimación por IA (tu clave gratuita de Gemini, en Ajustes ⚙). Puedes editar cada ingrediente antes de guardar si algo no cuadra.<br>
+      <b>Foto / Descripción:</b> estimación por IA (tu clave gratuita de Gemini, en Ajustes ⚙). Puedes editar cada ingrediente antes de guardar si algo no cuadra.<br>
       <b>Repetir plato:</b> reutiliza uno ya guardado, por si hoy has comido lo mismo.
     </div>
   </div>
@@ -463,6 +473,9 @@
   <!-- ===================== MIS INGREDIENTES ===================== -->
   <div id="tab-ingredientes" class="tab-panel" hidden>
     <h2 class="tab-title">Mis ingredientes</h2>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-8px;line-height:1.5;">
+      Se usan como referencia en la Calculadora: si la IA (foto o descripción) reconoce que algo coincide con uno de estos, usa su dato exacto en vez de estimar a ojo. Aun así, no puede adivinar variantes visualmente idénticas (ej. mayonesa normal vs. ligera) — en esos casos, edita esa línea después de analizar, menciónalo por su nombre en "Descripción", o búscalo aquí mismo al construir el plato (tus ingredientes salen primero en esa búsqueda).
+    </p>
 
     <div class="card">
       <button class="primary" id="toggleIngForm">+ Añadir ingrediente</button>
@@ -558,6 +571,10 @@
     </div>
     <button class="primary" id="datosGuardarBtn" style="width:100%;margin-top:6px;">Guardar datos</button>
     <div id="datosResultado" style="margin-top:16px;"></div>
+  </div>
+
+  <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ink-soft);opacity:.7;">
+    Aplicación creada por Pisapraos
   </div>
 
   <!-- ===================== MODAL ===================== -->
@@ -820,6 +837,7 @@ setupPillGroup('datosIntensidad');
 setupPillGroup('datosObjetivo', (val) => {
   document.getElementById('datosIntensidadWrap').hidden = (val === 'mantener');
 });
+setupPillGroup('platoTipoPills');
 
 function pillGroupValue(id){
   const active = document.querySelector(`#${id} .pill.active`);
@@ -1087,7 +1105,9 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional ni markdown, con esta
 }`;
 }
 
-function applyAnalysisResult(parsed){
+function dataUrlToBase64(dataUrl){ return (dataUrl || '').split(',')[1] || ''; }
+
+function applyAnalysisResult(parsed, source, platoTipo){
   manualItems = (parsed.alimentos || []).map(a => ({
     nombre: a.nombre || 'Alimento',
     gramos: Number(a.cantidad_g) || 100,
@@ -1102,7 +1122,29 @@ function applyAnalysisResult(parsed){
     confianza: parsed.confianza || null,
     notas: parsed.notas || ''
   };
+  lastAnalysisSource = source || null;
+  lastAnalysisPlatoTipo = platoTipo || '';
+  lastAnalysisGramosOriginal = manualItems.reduce((s,i) => s + i.gramos, 0);
   renderManualItemsList();
+}
+
+async function buildCalibrationParts(platoTipo){
+  if (!platoTipo) return { parts: [], hint: '' };
+  const calib = await storageGet(`calib:${platoTipo}`);
+  const factor = await storageGet(`calib:factor:${platoTipo}`);
+  let parts = [];
+  let hint = '';
+  if (calib && calib.foto && calib.items && calib.items.length){
+    parts = [
+      { text: `Foto de referencia de un plato "${platoTipo}" con cantidades REALES conocidas y pesadas por el usuario: ${calib.items.map(i=>`${i.nombre} ${i.gramos}g`).join(', ')}. Úsala como ancla visual de tamaño y proporción al estimar la siguiente foto, que usa el mismo tipo de plato.` },
+      { inline_data: { mime_type: 'image/jpeg', data: dataUrlToBase64(calib.foto) } }
+    ];
+  }
+  if (factor && Math.abs(factor - 1) > 0.05){
+    const pct = Math.round((factor - 1) * 100);
+    hint = `\n\nBasándote en correcciones anteriores del usuario en este tipo de plato, las cantidades reales suelen ser un ${Math.abs(pct)}% ${pct > 0 ? 'mayores' : 'menores'} de lo que una estimación visual ingenua daría — ajusta tu estimación en consecuencia.`;
+  }
+  return { parts, hint };
 }
 
 async function analyzePlate(){
@@ -1112,15 +1154,18 @@ async function analyzePlate(){
   loadingWrap.hidden = false;
   analyzeBtn.disabled = true;
 
+  const platoTipo = pillGroupValue('platoTipoPills') || '';
   const ingredientsContext = await buildIngredientsContext();
-  const prompt = buildAnalysisPrompt(`\n\nApóyate en referencias de tamaño habituales (plato estándar ~26cm, cubiertos, vasos) para estimar las cantidades a partir de la foto.${ingredientsContext}`);
+  const { parts: calibParts, hint: factorHint } = await buildCalibrationParts(platoTipo);
+  const prompt = buildAnalysisPrompt(`\n\nApóyate en referencias de tamaño habituales (plato estándar ~26cm, cubiertos, vasos) para estimar las cantidades a partir de la foto.${ingredientsContext}${factorHint}`);
 
   try {
     const text = await geminiRequest([
+      ...calibParts,
       { text: prompt },
       { inline_data: { mime_type: currentMediaType, data: currentBase64 } }
     ]);
-    applyAnalysisResult(parseJsonLoose(text));
+    applyAnalysisResult(parseJsonLoose(text), 'foto', platoTipo);
   } catch (err) {
     console.error(err);
     errorWrapCalc.innerHTML = `<div class="error">No se pudo analizar la foto. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
@@ -1143,7 +1188,7 @@ document.getElementById('textAnalyzeBtn').addEventListener('click', async () => 
   const prompt = buildAnalysisPrompt(`\n\nEl usuario describe así lo que ha comido: "${desc}". Estima cantidades razonables según raciones habituales en España.${ingredientsContext}`);
   try {
     const text = await geminiRequest([{ text: prompt }]);
-    applyAnalysisResult(parseJsonLoose(text));
+    applyAnalysisResult(parseJsonLoose(text), 'texto', '');
   } catch (err) {
     console.error(err);
     errorWrapCalc.innerHTML = `<div class="error">No se pudo calcular. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
@@ -1161,6 +1206,9 @@ const repeatCard = document.getElementById('repeatCard');
 let manualItems = [];
 let analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
 let repeatedMealFoto = '';
+let lastAnalysisSource = null;
+let lastAnalysisPlatoTipo = '';
+let lastAnalysisGramosOriginal = 0;
 
 calcModeToggle.addEventListener('click', (e) => {
   const btn = e.target.closest('.pill');
@@ -1168,6 +1216,7 @@ calcModeToggle.addEventListener('click', (e) => {
   calcModeToggle.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   const mode = btn.dataset.mode;
+  document.getElementById('platoTipoCard').hidden = mode !== 'foto';
   captureCard.hidden = mode !== 'foto';
   textCard.hidden = mode !== 'texto';
   repeatCard.hidden = mode !== 'repetir';
@@ -1228,6 +1277,8 @@ async function renderRepeatList(){
       manualItems = mealToManualItems(meal);
       analysisMeta = { vitaminas_destacadas: meal.vitaminas_destacadas || [], confianza: meal.confianza || null, notas: 'Repetido desde un plato guardado — revisa las cantidades por si hoy han sido distintas.' };
       repeatedMealFoto = meal.foto || '';
+      lastAnalysisSource = null;
+      lastAnalysisPlatoTipo = '';
       renderManualItemsList();
     });
   });
@@ -1241,10 +1292,18 @@ async function searchOffFood(){
   if (!query) return;
   const statusEl = document.getElementById('offSearchStatus');
   const resultsEl = document.getElementById('offSearchResults');
-  statusEl.innerHTML = `<div class="loading">Buscando en Open Food Facts…<div class="bar"></div></div>`;
+  statusEl.innerHTML = `<div class="loading">Buscando…<div class="bar"></div></div>`;
   resultsEl.innerHTML = '';
   try {
-    const results = await offSearchByName(query);
+    const own = await loadAllIngredients();
+    const q = query.toLowerCase();
+    const ownMatches = own
+      .filter(i => i.nombre.toLowerCase().includes(q) || (i.marca||'').toLowerCase().includes(q))
+      .map(i => ({ nombre: i.nombre, marca: i.marca, kcal_100g: i.kcal_100g, proteinas_100g: i.proteinas_100g, carbohidratos_100g: i.carbohidratos_100g, grasas_100g: i.grasas_100g, fibra_100g: i.fibra_100g, foto: i.foto, propio: true }));
+
+    const offResults = await offSearchByName(query);
+    const results = [...ownMatches, ...offResults];
+
     statusEl.innerHTML = '';
     if (!results.length){
       resultsEl.innerHTML = `<div class="empty-state">Sin resultados para "${escapeHtml(query)}".</div>`;
@@ -1253,8 +1312,8 @@ async function searchOffFood(){
     resultsEl.innerHTML = results.map((r, i) => `
       <div class="list-row" data-idx="${i}" style="cursor:pointer;">
         <div class="lr-left">
-          <div class="lr-title">${escapeHtml(r.nombre)}${r.marca ? ' · '+escapeHtml(r.marca) : ''}</div>
-          <div class="lr-sub">${r.kcal_100g} kcal/100g</div>
+          <div class="lr-title">${r.propio ? '🌟 ' : ''}${escapeHtml(r.nombre)}${r.marca ? ' · '+escapeHtml(r.marca) : ''}</div>
+          <div class="lr-sub">${r.kcal_100g} kcal/100g${r.propio ? ' · tuyo' : ''}</div>
         </div>
       </div>`).join('');
     resultsEl.querySelectorAll('.list-row').forEach(row => {
@@ -1280,6 +1339,84 @@ function openGramsModal(product){
     closeModal();
     renderManualItemsList();
   });
+}
+
+document.getElementById('openCalibBtn').addEventListener('click', () => openCalibModal());
+
+async function openCalibModal(){
+  let calibTipo = pillGroupValue('platoTipoPills') || 'llano';
+  let calibPhotoDataUrl = null;
+  let calibItems = [];
+
+  async function render(){
+    const existing = await storageGet(`calib:${calibTipo}`);
+    openModal(`
+      <div class="modal-head"><h3>Calibrar plato</h3><button class="modal-close" id="cClose">✕</button></div>
+      <div class="pill-group" id="calibTipoPills" style="margin-top:0;">
+        <button type="button" class="pill ${calibTipo==='llano'?'active':''}" data-val="llano">🍽️ Llano</button>
+        <button type="button" class="pill ${calibTipo==='hondo'?'active':''}" data-val="hondo">🥣 Hondo</button>
+      </div>
+      <p class="notes" style="margin:8px 0 12px;">Haz una foto de ese plato con alimentos que hayas pesado de verdad (ej. en una báscula de cocina) y apunta aquí sus pesos reales. La IA la usará como referencia de tamaño en tus próximas fotos con este tipo de plato.</p>
+      ${existing ? `<p class="info-msg">Ya tienes una calibración de "${calibTipo}" guardada. Si sigues, la sustituirás.</p>` : ''}
+
+      <button class="ghost" type="button" id="calibPhotoBtn">📷 ${calibPhotoDataUrl ? 'Cambiar foto' : 'Hacer foto de referencia'}</button>
+      <input type="file" id="calibPhotoInput" accept="image/*" capture="environment" hidden>
+      ${calibPhotoDataUrl ? `<img src="${calibPhotoDataUrl}" style="width:100%;border-radius:var(--radius-md);margin-top:10px;border:var(--border-w) solid var(--ink);">` : ''}
+
+      <div style="margin-top:14px;">
+        <div class="field-row">
+          <div class="field"><label>Alimento</label><input type="text" id="calibItemNombre" placeholder="Ej. Arroz"></div>
+          <div class="field" style="max-width:90px;"><label>Gramos</label><input type="number" id="calibItemGramos" inputmode="decimal"></div>
+        </div>
+        <button class="small-ghost" type="button" id="calibAddItemBtn">+ Añadir a la referencia</button>
+      </div>
+      <div id="calibItemsWrap" style="margin-top:10px;">
+        ${calibItems.map((it, idx) => `
+          <div class="food-row">
+            <div class="food-name">${escapeHtml(it.nombre)}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="food-meta">${it.gramos} g</span>
+              <button class="lr-del" data-idx="${idx}">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <button class="primary" id="calibSaveBtn" style="margin-top:14px;">Guardar calibración</button>
+      <div id="calibStatus"></div>
+    `);
+
+    document.getElementById('cClose').addEventListener('click', closeModal);
+    document.querySelectorAll('#calibTipoPills .pill').forEach(p => {
+      p.addEventListener('click', () => { calibTipo = p.dataset.val; render(); });
+    });
+    document.getElementById('calibPhotoBtn').addEventListener('click', () => document.getElementById('calibPhotoInput').click());
+    document.getElementById('calibPhotoInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const raw = await fileToDataUrl(file);
+      calibPhotoDataUrl = await makeThumbnail(raw, 500);
+      render();
+    });
+    document.getElementById('calibAddItemBtn').addEventListener('click', () => {
+      const nombre = document.getElementById('calibItemNombre').value.trim();
+      const gramos = parseFloat(document.getElementById('calibItemGramos').value);
+      if (!nombre || !gramos) return;
+      calibItems.push({ nombre, gramos });
+      render();
+    });
+    document.querySelectorAll('#calibItemsWrap .lr-del').forEach(btn => {
+      btn.addEventListener('click', () => { calibItems.splice(parseInt(btn.dataset.idx),1); render(); });
+    });
+    document.getElementById('calibSaveBtn').addEventListener('click', async () => {
+      if (!calibPhotoDataUrl || !calibItems.length){
+        document.getElementById('calibStatus').innerHTML = `<div class="error">Añade una foto y al menos un alimento con su peso real.</div>`;
+        return;
+      }
+      await storageSet(`calib:${calibTipo}`, { foto: calibPhotoDataUrl, items: calibItems, fecha: Date.now() });
+      await storageSet(`calib:factor:${calibTipo}`, 1);
+      document.getElementById('calibStatus').innerHTML = `<div class="info-msg">Calibración de "${calibTipo}" guardada ✓</div>`;
+    });
+  }
+  render();
 }
 
 function openEditItemModal(index){
@@ -1333,7 +1470,19 @@ function renderManualItemsList(){
   document.getElementById('finishManualBtn').addEventListener('click', finishManualEntry);
 }
 
+async function learnFromCorrection(){
+  if (lastAnalysisSource !== 'foto' || !lastAnalysisPlatoTipo || !lastAnalysisGramosOriginal) return;
+  const finalGramos = manualItems.reduce((s,i) => s + i.gramos, 0);
+  if (!finalGramos) return;
+  const factorNuevo = finalGramos / lastAnalysisGramosOriginal;
+  const key = `calib:factor:${lastAnalysisPlatoTipo}`;
+  const anterior = (await storageGet(key)) || 1;
+  const actualizado = anterior * 0.7 + factorNuevo * 0.3;
+  await storageSet(key, actualizado);
+}
+
 function finishManualEntry(){
+  learnFromCorrection();
   const parsed = {
     alimentos: manualItems.map(i => ({
       nombre: i.nombre,
@@ -1354,6 +1503,9 @@ function finishManualEntry(){
   manualItems = [];
   analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
   repeatedMealFoto = '';
+  lastAnalysisSource = null;
+  lastAnalysisPlatoTipo = '';
+  lastAnalysisGramosOriginal = 0;
   document.getElementById('manualItemsWrap').innerHTML = '';
   document.getElementById('itemsCard').hidden = true;
   document.getElementById('offSearchResults').innerHTML = '';
