@@ -305,7 +305,18 @@
   /* --- week/month rows --- */
   .week-row{margin-bottom:12px;}
   .week-row .wr-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;}
-  .week-row .wr-bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;}
+  .week-row .wr-bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;position:relative;}
+  .wr-bar-burn{position:absolute;top:0;height:100%;background:var(--basil);opacity:.75;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-dow{text-align:center;font-size:9px;font-family:ui-monospace,monospace;color:var(--ink-soft);padding-bottom:2px;}
+  .cal-day{aspect-ratio:1;border:1.5px solid var(--line);border-radius:var(--radius-sm);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:3px 2px;background:var(--paper);overflow:hidden;}
+  .cal-day.out{opacity:.28;}
+  .cal-day.today{border-color:var(--mango);border-width:2px;}
+  .cal-daynum{font-family:var(--font-display);font-weight:700;font-size:10.5px;line-height:1.3;}
+  .cal-kcal{font-family:ui-monospace,monospace;font-size:8.5px;color:var(--mango-dark);font-weight:700;line-height:1.3;}
+  .cal-burn{font-family:ui-monospace,monospace;font-size:8px;color:var(--basil);line-height:1.2;}
+  .wr-legend{display:flex;gap:14px;margin-top:12px;font-size:10.5px;color:var(--ink-soft);}
+  .wr-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;}
   .week-row .wr-bar-fill{height:100%;background:var(--mango);}
   .stat-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
   /* --- planner --- */
@@ -377,20 +388,11 @@
 
   <!-- ===================== CALCULADORA ===================== -->
   <div id="tab-calculadora" class="tab-panel">
+    <label style="display:block;font-family:var(--font-display);font-size:16px;margin-bottom:8px;">¿Qué vas a comer ahora?</label>
     <div class="pill-group" id="calcModeToggle">
-      <button class="pill active" data-mode="foto">📷 Foto</button>
-      <button class="pill" data-mode="texto">✏️ Descripción</button>
-      <button class="pill" data-mode="repetir">🔁 Repetir plato</button>
-    </div>
-
-    <div class="card" id="platoTipoCard" style="padding:12px 16px;">
-      <label style="display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;font-family:ui-monospace,monospace;text-transform:uppercase;">¿Qué plato usas hoy?</label>
-      <div class="pill-group" id="platoTipoPills" style="margin:0 0 8px;">
-        <button type="button" class="pill active" data-val="">Sin especificar</button>
-        <button type="button" class="pill" data-val="llano">🍽️ Llano</button>
-        <button type="button" class="pill" data-val="hondo">🥣 Hondo</button>
-      </div>
-      <button class="ghost" id="openCalibBtn" style="margin-top:0;">⚖️ Calibrar mis platos</button>
+      <button class="pill active" data-mode="foto">📷 Sacar foto</button>
+      <button class="pill" data-mode="repetir">🔁 Plato guardado</button>
+      <button class="pill" data-mode="crear">🧩 Crearlo yo mismo</button>
     </div>
 
     <div class="card capture-zone" id="captureCard">
@@ -416,24 +418,26 @@
       </div>
     </div>
 
-    <div class="card" id="textCard" hidden>
-      <div class="field"><label>Describe lo que has comido</label><textarea id="textDescInput" placeholder="Ej. un plato hondo de arroz con pollo guisado y un poco de aceite"></textarea></div>
-      <button class="primary" id="textAnalyzeBtn">Calcular con IA</button>
-      <div class="loading" id="textLoadingWrap" hidden>Estimando alimentos y nutrientes…<div class="bar"></div></div>
-    </div>
-
     <div class="card" id="repeatCard" hidden>
       <div class="field"><label>Buscar en tus platos guardados</label><input type="text" id="repeatSearchInput" placeholder="Ej. arroz con pollo…"></div>
       <div id="repeatList"></div>
+    </div>
+
+    <div class="card" id="textCard" hidden>
+      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Describe tu plato con IA (opcional)</h4>
+      <div class="field"><label>¿Qué has comido?</label><textarea id="textDescInput" placeholder="Ej. un plato hondo de arroz con pollo guisado y un poco de aceite"></textarea></div>
+      <button class="primary" id="textAnalyzeBtn">Calcular con IA</button>
+      <div class="loading" id="textLoadingWrap" hidden>Estimando alimentos y nutrientes…<div class="bar"></div></div>
+      <p class="notes" style="margin-top:10px;">O, si prefieres, añade los ingredientes uno a uno justo debajo, sin necesidad de IA.</p>
     </div>
 
     <div class="card" id="itemsCard" hidden>
       <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Tu plato</h4>
       <div id="manualItemsWrap"></div>
       <div class="field" style="margin-top:12px;">
-        <label>+ Añadir otro ingrediente</label>
+        <label>+ Añadir ingrediente (tuyos primero, luego Open Food Facts)</label>
         <div style="display:flex;gap:6px;">
-          <input type="text" id="offSearchInput" placeholder="Buscar en Open Food Facts…" style="flex:1;">
+          <input type="text" id="offSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;">
           <button class="small-ghost" id="offSearchBtn">Buscar</button>
         </div>
       </div>
@@ -445,8 +449,9 @@
     <div class="card" id="resultCard" hidden></div>
 
     <div class="disclaimer">
-      <b>Foto / Descripción:</b> estimación por IA (tu clave gratuita de Gemini, en Ajustes ⚙). Puedes editar cada ingrediente antes de guardar si algo no cuadra.<br>
-      <b>Repetir plato:</b> reutiliza uno ya guardado, por si hoy has comido lo mismo.
+      <b>Sacar foto:</b> estimación por IA (tu clave gratuita de Gemini, en Ajustes ⚙). Puedes editar cada ingrediente antes de guardar si algo no cuadra.<br>
+      <b>Plato guardado:</b> reutiliza uno ya guardado, por si hoy has comido lo mismo.<br>
+      <b>Crearlo yo mismo:</b> descríbelo con IA, añade ingredientes uno a uno, o combina ambos.
     </div>
   </div>
 
@@ -837,7 +842,6 @@ setupPillGroup('datosIntensidad');
 setupPillGroup('datosObjetivo', (val) => {
   document.getElementById('datosIntensidadWrap').hidden = (val === 'mantener');
 });
-setupPillGroup('platoTipoPills');
 
 function pillGroupValue(id){
   const active = document.querySelector(`#${id} .pill.active`);
@@ -1107,7 +1111,7 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional ni markdown, con esta
 
 function dataUrlToBase64(dataUrl){ return (dataUrl || '').split(',')[1] || ''; }
 
-function applyAnalysisResult(parsed, source, platoTipo){
+function applyAnalysisResult(parsed, source){
   manualItems = (parsed.alimentos || []).map(a => ({
     nombre: a.nombre || 'Alimento',
     gramos: Number(a.cantidad_g) || 100,
@@ -1123,26 +1127,24 @@ function applyAnalysisResult(parsed, source, platoTipo){
     notas: parsed.notas || ''
   };
   lastAnalysisSource = source || null;
-  lastAnalysisPlatoTipo = platoTipo || '';
   lastAnalysisGramosOriginal = manualItems.reduce((s,i) => s + i.gramos, 0);
   renderManualItemsList();
 }
 
-async function buildCalibrationParts(platoTipo){
-  if (!platoTipo) return { parts: [], hint: '' };
-  const calib = await storageGet(`calib:${platoTipo}`);
-  const factor = await storageGet(`calib:factor:${platoTipo}`);
+async function buildCalibrationParts(){
   let parts = [];
-  let hint = '';
-  if (calib && calib.foto && calib.items && calib.items.length){
-    parts = [
-      { text: `Foto de referencia de un plato "${platoTipo}" con cantidades REALES conocidas y pesadas por el usuario: ${calib.items.map(i=>`${i.nombre} ${i.gramos}g`).join(', ')}. Úsala como ancla visual de tamaño y proporción al estimar la siguiente foto, que usa el mismo tipo de plato.` },
-      { inline_data: { mime_type: 'image/jpeg', data: dataUrlToBase64(calib.foto) } }
-    ];
+  for (const tipo of ['llano','hondo']){
+    const calib = await storageGet(`calib:${tipo}`);
+    if (calib && calib.foto && calib.items && calib.items.length){
+      parts.push({ text: `Foto de referencia de tu plato "${tipo}" con cantidades REALES conocidas y pesadas por el usuario: ${calib.items.map(i=>`${i.nombre} ${i.gramos}g`).join(', ')}. Si la siguiente foto usa un plato de este tipo, úsala como ancla visual de tamaño y proporción.` });
+      parts.push({ inline_data: { mime_type: 'image/jpeg', data: dataUrlToBase64(calib.foto) } });
+    }
   }
+  const factor = await storageGet('calib:factor');
+  let hint = '';
   if (factor && Math.abs(factor - 1) > 0.05){
     const pct = Math.round((factor - 1) * 100);
-    hint = `\n\nBasándote en correcciones anteriores del usuario en este tipo de plato, las cantidades reales suelen ser un ${Math.abs(pct)}% ${pct > 0 ? 'mayores' : 'menores'} de lo que una estimación visual ingenua daría — ajusta tu estimación en consecuencia.`;
+    hint = `\n\nBasándote en correcciones anteriores del usuario, las cantidades reales suelen ser un ${Math.abs(pct)}% ${pct > 0 ? 'mayores' : 'menores'} de lo que una estimación visual ingenua daría — ajusta tu estimación en consecuencia.`;
   }
   return { parts, hint };
 }
@@ -1154,9 +1156,8 @@ async function analyzePlate(){
   loadingWrap.hidden = false;
   analyzeBtn.disabled = true;
 
-  const platoTipo = pillGroupValue('platoTipoPills') || '';
   const ingredientsContext = await buildIngredientsContext();
-  const { parts: calibParts, hint: factorHint } = await buildCalibrationParts(platoTipo);
+  const { parts: calibParts, hint: factorHint } = await buildCalibrationParts();
   const prompt = buildAnalysisPrompt(`\n\nApóyate en referencias de tamaño habituales (plato estándar ~26cm, cubiertos, vasos) para estimar las cantidades a partir de la foto.${ingredientsContext}${factorHint}`);
 
   try {
@@ -1165,7 +1166,7 @@ async function analyzePlate(){
       { text: prompt },
       { inline_data: { mime_type: currentMediaType, data: currentBase64 } }
     ]);
-    applyAnalysisResult(parseJsonLoose(text), 'foto', platoTipo);
+    applyAnalysisResult(parseJsonLoose(text), 'foto');
   } catch (err) {
     console.error(err);
     errorWrapCalc.innerHTML = `<div class="error">No se pudo analizar la foto. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
@@ -1188,7 +1189,7 @@ document.getElementById('textAnalyzeBtn').addEventListener('click', async () => 
   const prompt = buildAnalysisPrompt(`\n\nEl usuario describe así lo que ha comido: "${desc}". Estima cantidades razonables según raciones habituales en España.${ingredientsContext}`);
   try {
     const text = await geminiRequest([{ text: prompt }]);
-    applyAnalysisResult(parseJsonLoose(text), 'texto', '');
+    applyAnalysisResult(parseJsonLoose(text), 'texto');
   } catch (err) {
     console.error(err);
     errorWrapCalc.innerHTML = `<div class="error">No se pudo calcular. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
@@ -1207,22 +1208,23 @@ let manualItems = [];
 let analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
 let repeatedMealFoto = '';
 let lastAnalysisSource = null;
-let lastAnalysisPlatoTipo = '';
 let lastAnalysisGramosOriginal = 0;
+
+let currentCalcMode = 'foto';
 
 calcModeToggle.addEventListener('click', (e) => {
   const btn = e.target.closest('.pill');
   if (!btn) return;
   calcModeToggle.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
-  const mode = btn.dataset.mode;
-  document.getElementById('platoTipoCard').hidden = mode !== 'foto';
-  captureCard.hidden = mode !== 'foto';
-  textCard.hidden = mode !== 'texto';
-  repeatCard.hidden = mode !== 'repetir';
+  currentCalcMode = btn.dataset.mode;
+  captureCard.hidden = currentCalcMode !== 'foto';
+  textCard.hidden = currentCalcMode !== 'crear';
+  repeatCard.hidden = currentCalcMode !== 'repetir';
+  document.getElementById('itemsCard').hidden = !(currentCalcMode === 'crear' || manualItems.length > 0);
   resultCard.hidden = true;
   errorWrapCalc.innerHTML = '';
-  if (mode === 'repetir') renderRepeatList();
+  if (currentCalcMode === 'repetir') renderRepeatList();
 });
 
 document.getElementById('repeatSearchInput').addEventListener('input', renderRepeatList);
@@ -1278,7 +1280,6 @@ async function renderRepeatList(){
       analysisMeta = { vitaminas_destacadas: meal.vitaminas_destacadas || [], confianza: meal.confianza || null, notas: 'Repetido desde un plato guardado — revisa las cantidades por si hoy han sido distintas.' };
       repeatedMealFoto = meal.foto || '';
       lastAnalysisSource = null;
-      lastAnalysisPlatoTipo = '';
       renderManualItemsList();
     });
   });
@@ -1341,10 +1342,8 @@ function openGramsModal(product){
   });
 }
 
-document.getElementById('openCalibBtn').addEventListener('click', () => openCalibModal());
-
 async function openCalibModal(){
-  let calibTipo = pillGroupValue('platoTipoPills') || 'llano';
+  let calibTipo = 'llano';
   let calibPhotoDataUrl = null;
   let calibItems = [];
 
@@ -1412,7 +1411,7 @@ async function openCalibModal(){
         return;
       }
       await storageSet(`calib:${calibTipo}`, { foto: calibPhotoDataUrl, items: calibItems, fecha: Date.now() });
-      await storageSet(`calib:factor:${calibTipo}`, 1);
+      await storageSet('calib:factor', 1);
       document.getElementById('calibStatus').innerHTML = `<div class="info-msg">Calibración de "${calibTipo}" guardada ✓</div>`;
     });
   }
@@ -1443,7 +1442,7 @@ function openEditItemModal(index){
 
 function renderManualItemsList(){
   const wrap = document.getElementById('manualItemsWrap');
-  document.getElementById('itemsCard').hidden = manualItems.length === 0;
+  document.getElementById('itemsCard').hidden = !(currentCalcMode === 'crear' || manualItems.length > 0);
   if (!manualItems.length){ wrap.innerHTML = ''; return; }
   const totalKcal = manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0);
   wrap.innerHTML = `
@@ -1471,11 +1470,11 @@ function renderManualItemsList(){
 }
 
 async function learnFromCorrection(){
-  if (lastAnalysisSource !== 'foto' || !lastAnalysisPlatoTipo || !lastAnalysisGramosOriginal) return;
+  if (lastAnalysisSource !== 'foto' || !lastAnalysisGramosOriginal) return;
   const finalGramos = manualItems.reduce((s,i) => s + i.gramos, 0);
   if (!finalGramos) return;
   const factorNuevo = finalGramos / lastAnalysisGramosOriginal;
-  const key = `calib:factor:${lastAnalysisPlatoTipo}`;
+  const key = 'calib:factor';
   const anterior = (await storageGet(key)) || 1;
   const actualizado = anterior * 0.7 + factorNuevo * 0.3;
   await storageSet(key, actualizado);
@@ -1504,10 +1503,9 @@ function finishManualEntry(){
   analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
   repeatedMealFoto = '';
   lastAnalysisSource = null;
-  lastAnalysisPlatoTipo = '';
   lastAnalysisGramosOriginal = 0;
   document.getElementById('manualItemsWrap').innerHTML = '';
-  document.getElementById('itemsCard').hidden = true;
+  document.getElementById('itemsCard').hidden = currentCalcMode !== 'crear';
   document.getElementById('offSearchResults').innerHTML = '';
   document.getElementById('offSearchInput').value = '';
 }
@@ -1652,6 +1650,10 @@ document.getElementById('diarioViewToggle').addEventListener('click', (e) => {
   refreshDiario();
 });
 
+async function loadAllExercise(){
+  return await storageListEntries('exercise:');
+}
+
 async function refreshDiario(){
   const meals = await loadAllMeals();
   if (diarioView === 'dia'){
@@ -1659,8 +1661,8 @@ async function refreshDiario(){
     const exercises = await loadExerciseForDay(dateKey(diarioRefDate));
     renderDiaView(meals, computeGoals(profile), exercises);
   }
-  else if (diarioView === 'semana') renderSemanaView(meals);
-  else renderMesView(meals);
+  else if (diarioView === 'semana') renderSemanaView(meals, await loadAllExercise());
+  else renderMesView(meals, await loadAllExercise());
 }
 
 /* ============================================================
@@ -1819,15 +1821,18 @@ function renderDiaView(meals, goals, exercises){
   });
 }
 
-function renderSemanaView(meals){
+function renderSemanaView(meals, exercises){
   const monday = mondayOf(diarioRefDate);
   const days = Array.from({length:7}, (_,i) => addDays(monday,i));
-  const dayTotals = days.map(d => {
+  const dayData = days.map(d => {
     const key = dateKey(d);
-    return meals.filter(m => dateKey(new Date(m.timestamp)) === key).reduce((s,m) => s + (m.total_kcal||0), 0);
+    const kcal = meals.filter(m => dateKey(new Date(m.timestamp)) === key).reduce((s,m) => s + (m.total_kcal||0), 0);
+    const quemado = (exercises||[]).filter(e => dateKey(new Date(e.timestamp)) === key).reduce((s,e) => s + (e.kcal_quemadas||0), 0);
+    return { kcal, quemado, neto: Math.max(0, kcal - quemado) };
   });
-  const max = Math.max(...dayTotals, 1);
-  const weekTotal = dayTotals.reduce((a,b) => a+b, 0);
+  const max = Math.max(...dayData.map(d => d.kcal), 1);
+  const weekTotal = dayData.reduce((a,d) => a+d.kcal, 0);
+  const weekQuemado = dayData.reduce((a,d) => a+d.quemado, 0);
   const rangeLabel = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
 
   diarioContent.innerHTML = `
@@ -1837,28 +1842,62 @@ function renderSemanaView(meals){
       <button id="wNext">›</button>
     </div>
     <div class="card">
-      ${days.map((d,i) => `
+      ${days.map((d,i) => {
+        const dd = dayData[i];
+        const netoPct = (dd.neto/max*100).toFixed(1);
+        const quemadoPct = (Math.min(dd.quemado, dd.kcal)/max*100).toFixed(1);
+        return `
         <div class="week-row">
-          <div class="wr-top"><span>${DIAS_SEMANA[i]} ${d.getDate()}</span><span>${Math.round(dayTotals[i])} kcal</span></div>
-          <div class="wr-bar"><div class="wr-bar-fill" style="width:${(dayTotals[i]/max*100).toFixed(0)}%"></div></div>
-        </div>`).join('')}
+          <div class="wr-top"><span>${DIAS_SEMANA[i]} ${d.getDate()}</span><span>${Math.round(dd.kcal)} kcal${dd.quemado ? ` <span style="color:var(--basil);">(−${Math.round(dd.quemado)} ejerc.)</span>` : ''}</span></div>
+          <div class="wr-bar">
+            <div class="wr-bar-fill" style="width:${netoPct}%"></div>
+            ${dd.quemado ? `<div class="wr-bar-burn" style="width:${quemadoPct}%;left:${netoPct}%;"></div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
       <div class="total-row"><span class="lbl">Total semana</span><span class="val">${Math.round(weekTotal)} kcal</span></div>
       <div class="stat-row"><span>Media diaria</span><span>${Math.round(weekTotal/7)} kcal</span></div>
+      ${weekQuemado ? `<div class="stat-row"><span>Quemadas con ejercicio</span><span style="color:var(--basil);">−${Math.round(weekQuemado)} kcal</span></div>` : ''}
+      <div class="wr-legend"><span><i style="background:var(--mango);"></i> Consumido neto</span><span><i style="background:var(--basil);"></i> Cubierto por ejercicio</span></div>
     </div>
   `;
   document.getElementById('wPrev').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,-7); refreshDiario(); });
   document.getElementById('wNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,7); refreshDiario(); });
 }
 
-function renderMesView(meals){
+function renderMesView(meals, exercises){
   const year = diarioRefDate.getFullYear(), month = diarioRefDate.getMonth();
-  const inMonth = meals.filter(m => { const d = new Date(m.timestamp); return d.getFullYear()===year && d.getMonth()===month; });
 
-  const byDay = {};
-  inMonth.forEach(m => { const k = dateKey(new Date(m.timestamp)); byDay[k] = (byDay[k]||0) + (m.total_kcal||0); });
-  const dayKeys = Object.keys(byDay).sort().reverse();
-  const monthTotal = Object.values(byDay).reduce((a,b) => a+b, 0);
+  const byDayKcal = {};
+  meals.forEach(m => { const d = new Date(m.timestamp); if (d.getFullYear()===year && d.getMonth()===month){ const k = dateKey(d); byDayKcal[k] = (byDayKcal[k]||0) + (m.total_kcal||0); } });
+  const byDayQuemado = {};
+  (exercises||[]).forEach(ex => { const d = new Date(ex.timestamp); if (d.getFullYear()===year && d.getMonth()===month){ const k = dateKey(d); byDayQuemado[k] = (byDayQuemado[k]||0) + (ex.kcal_quemadas||0); } });
+
+  const dayKeys = Object.keys(byDayKcal);
+  const monthTotal = Object.values(byDayKcal).reduce((a,b) => a+b, 0);
+  const monthQuemado = Object.values(byDayQuemado).reduce((a,b) => a+b, 0);
   const avg = dayKeys.length ? monthTotal / dayKeys.length : 0;
+
+  const firstOfMonth = new Date(year, month, 1);
+  const lastOfMonth = new Date(year, month+1, 0);
+  const gridStart = mondayOf(firstOfMonth);
+  const totalCells = Math.ceil((lastOfMonth.getDate() + (firstOfMonth.getDay()===0?6:firstOfMonth.getDay()-1)) / 7) * 7;
+  const todayKey = dateKey(new Date());
+
+  let cellsHtml = '';
+  for (let i=0; i<totalCells; i++){
+    const d = addDays(gridStart, i);
+    const k = dateKey(d);
+    const inMonth = d.getMonth() === month;
+    const kcal = byDayKcal[k];
+    const quemado = byDayQuemado[k];
+    cellsHtml += `
+      <div class="cal-day ${inMonth?'':'out'} ${k===todayKey?'today':''}">
+        <div class="cal-daynum">${d.getDate()}</div>
+        ${kcal ? `<div class="cal-kcal">${Math.round(kcal)}</div>` : ''}
+        ${quemado ? `<div class="cal-burn">−${Math.round(quemado)}</div>` : ''}
+      </div>`;
+  }
 
   diarioContent.innerHTML = `
     <div class="date-nav">
@@ -1867,9 +1906,16 @@ function renderMesView(meals){
       <button id="mNext">›</button>
     </div>
     <div class="card">
+      <div class="cal-grid">
+        ${['L','M','X','J','V','S','D'].map(d => `<div class="cal-dow">${d}</div>`).join('')}
+        ${cellsHtml}
+      </div>
+      <div class="wr-legend" style="margin-top:12px;"><span><i style="background:var(--mango-dark);"></i> Kcal ingeridas</span><span><i style="background:var(--basil);"></i> Kcal quemadas</span></div>
+    </div>
+    <div class="card">
       <div class="total-row"><span class="lbl">Total del mes</span><span class="val">${Math.round(monthTotal)} kcal</span></div>
       <div class="stat-row"><span>Media / día con registros</span><span>${Math.round(avg)} kcal</span></div>
-      ${dayKeys.length ? dayKeys.map(k => `<div class="stat-row"><span>${parseDateKey(k).toLocaleDateString('es-ES',{day:'2-digit',month:'short'})}</span><span>${Math.round(byDay[k])} kcal</span></div>`).join('') : '<div class="empty-state">Sin registros este mes.</div>'}
+      ${monthQuemado ? `<div class="stat-row"><span>Quemadas con ejercicio</span><span style="color:var(--basil);">−${Math.round(monthQuemado)} kcal</span></div>` : ''}
     </div>
   `;
   document.getElementById('mPrev').addEventListener('click', () => { diarioRefDate = new Date(year, month-1, 1); refreshDiario(); });
@@ -2376,6 +2422,12 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
     <div id="sSaveStatus"></div>
 
     <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
+      <h3 style="font-size:15px;margin:0 0 8px;">Calibrar mis platos</h3>
+      <p class="notes" style="margin-bottom:12px;">Para que la IA estime mejor las cantidades, puedes enseñarle cómo son tus platos: haz una foto de tu plato llano y de tu hondo con alimentos que hayas pesado tú mismo. A partir de ahí, cada vez que fotografíes una comida, la app le pasa esas referencias a la IA para que sepa qué cantidad exacta corresponde a "lleno" en cada uno de tus platos, y calcule mejor aunque cambien los alimentos.</p>
+      <button class="ghost" id="openCalibBtn">⚖️ Calibrar mis platos</button>
+    </div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
       <h3 style="font-size:15px;margin:0 0 8px;">Copia de seguridad</h3>
       <p class="notes" style="margin-bottom:12px;">Descarga un archivo con todos tus platos, ingredientes, planes y datos. Guárdalo donde quieras (email, Drive...) y podrás restaurarlo si algo se borra o cambias de móvil.</p>
       <button class="ghost" id="sExportBtn">⬇️ Descargar copia de seguridad</button>
@@ -2384,6 +2436,7 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
       <div id="sBackupStatus"></div>
     </div>
   `);
+  document.getElementById('openCalibBtn').addEventListener('click', () => openCalibModal());
   document.getElementById('sClose').addEventListener('click', closeModal);
   document.getElementById('sSaveBtn').addEventListener('click', async () => {
     await saveSettings({
