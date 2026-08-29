@@ -315,6 +315,26 @@
   .cal-daynum{font-family:var(--font-display);font-weight:700;font-size:10.5px;line-height:1.3;}
   .cal-kcal{font-family:ui-monospace,monospace;font-size:8.5px;color:var(--mango-dark);font-weight:700;line-height:1.3;}
   .cal-burn{font-family:ui-monospace,monospace;font-size:8px;color:var(--basil);line-height:1.2;}
+  .mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .mode-grid button{
+    aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    border:var(--border-w) solid var(--ink);border-radius:var(--radius-md);background:var(--paper);
+    font-family:var(--font-display);font-weight:700;font-size:11.5px;color:var(--ink);cursor:pointer;
+    box-shadow:var(--shadow-btn);padding:6px 4px;text-align:center;line-height:1.2;
+  }
+  .mode-grid button .mg-icon{font-size:26px;line-height:1;}
+  .mode-grid button.active{background:var(--mango);color:#fff;}
+  html[data-style="nube"] .mode-grid button{border:none;}
+  html[data-style="nube"] .mode-grid button.active{background:linear-gradient(135deg,var(--mango),var(--basil));box-shadow:0 4px 12px rgba(143,123,255,.4);}
+  .kcal-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}
+  .kb-item{background:var(--stone);border-radius:var(--radius-sm);padding:10px 4px;text-align:center;}
+  .kb-value{font-family:ui-monospace,monospace;font-weight:700;font-size:16px;}
+  .kb-label{font-size:9.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin-top:2px;}
+  .valoracion-box{background:var(--paper);border:var(--border-w) solid var(--ink);border-left:5px solid var(--ink);border-radius:var(--radius-lg);padding:14px 16px;margin-top:16px;box-shadow:var(--shadow-card);}
+  .val-overall{font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:9px;}
+  .val-metrics{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .val-chip{font-size:10px;color:#fff;padding:3px 9px;border-radius:var(--radius-pill);font-family:ui-monospace,monospace;white-space:nowrap;}
+  .val-suggestions{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
   .wr-legend{display:flex;gap:14px;margin-top:12px;font-size:10.5px;color:var(--ink-soft);}
   .wr-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;}
   .week-row .wr-bar-fill{height:100%;background:var(--mango);}
@@ -389,10 +409,10 @@
   <!-- ===================== CALCULADORA ===================== -->
   <div id="tab-calculadora" class="tab-panel">
     <label style="display:block;font-family:var(--font-display);font-size:16px;margin-bottom:8px;">¿Qué vas a comer ahora?</label>
-    <div class="pill-group" id="calcModeToggle">
-      <button class="pill active" data-mode="foto">📷 Sacar foto</button>
-      <button class="pill" data-mode="repetir">🔁 Plato guardado</button>
-      <button class="pill" data-mode="crear">🧩 Crearlo yo mismo</button>
+    <div class="mode-grid" id="calcModeToggle">
+      <button class="active" data-mode="foto"><span class="mg-icon">📷</span><span>Sacar foto</span></button>
+      <button data-mode="repetir"><span class="mg-icon">🔁</span><span>Plato guardado</span></button>
+      <button data-mode="crear"><span class="mg-icon">🧩</span><span>Crearlo yo mismo</span></button>
     </div>
 
     <div class="card capture-zone" id="captureCard">
@@ -943,6 +963,16 @@ async function loadAllIngredients(){
 }
 
 /* --- render compartido de macros / vitaminas --- */
+function renderKcalBreakdown(consumido, quemado){
+  const neto = Math.max(0, consumido - quemado);
+  return `
+    <div class="kcal-breakdown">
+      <div class="kb-item"><div class="kb-value" style="color:var(--mango-dark);">${Math.round(consumido)}</div><div class="kb-label">Consumidas</div></div>
+      <div class="kb-item"><div class="kb-value" style="color:var(--basil);">${Math.round(quemado)}</div><div class="kb-label">Quemadas</div></div>
+      <div class="kb-item"><div class="kb-value" style="color:var(--ink);">${Math.round(neto)}</div><div class="kb-label">Diferencia</div></div>
+    </div>`;
+}
+
 function renderMacroGrid(m){
   return `
     <div class="macro-grid">
@@ -1213,9 +1243,9 @@ let lastAnalysisGramosOriginal = 0;
 let currentCalcMode = 'foto';
 
 calcModeToggle.addEventListener('click', (e) => {
-  const btn = e.target.closest('.pill');
+  const btn = e.target.closest('button');
   if (!btn) return;
-  calcModeToggle.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  calcModeToggle.querySelectorAll('button').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   currentCalcMode = btn.dataset.mode;
   captureCard.hidden = currentCalcMode !== 'foto';
@@ -1656,13 +1686,14 @@ async function loadAllExercise(){
 
 async function refreshDiario(){
   const meals = await loadAllMeals();
+  const profile = await getProfile();
+  const goals = computeGoals(profile);
   if (diarioView === 'dia'){
-    const profile = await getProfile();
     const exercises = await loadExerciseForDay(dateKey(diarioRefDate));
-    renderDiaView(meals, computeGoals(profile), exercises);
+    renderDiaView(meals, goals, exercises);
   }
-  else if (diarioView === 'semana') renderSemanaView(meals, await loadAllExercise());
-  else renderMesView(meals, await loadAllExercise());
+  else if (diarioView === 'semana') renderSemanaView(meals, await loadAllExercise(), goals);
+  else renderMesView(meals, await loadAllExercise(), goals);
 }
 
 /* ============================================================
@@ -1793,6 +1824,7 @@ function renderDiaView(meals, goals, exercises){
     <div class="card">
       ${slotsHtml}
       <div class="total-row"><span class="lbl">Total del día</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
+      ${exerciseTotal ? renderKcalBreakdown(totals.kcal, exerciseTotal) : ''}
       ${renderMacroGrid({total_proteinas_g:totals.prot, total_carbohidratos_g:totals.carb, total_grasas_g:totals.grasa, total_fibra_g:totals.fibra})}
     </div>
     ${exerciseHtml}
@@ -1810,6 +1842,7 @@ function renderDiaView(meals, goals, exercises){
         <p class="goal-empty">Configura tus datos en <a data-action="goto-datos">Mis datos</a> para ver aquí tu progreso frente al objetivo diario.</p>
       </div>
     `}
+    ${goals ? renderValoracion({ kcal: netKcal, prot: totals.prot, carb: totals.carb, grasa: totals.grasa, fibra: totals.fibra }, goals, 'día') : ''}
   `;
   document.getElementById('dPrev').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,-1); refreshDiario(); });
   document.getElementById('dNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,1); refreshDiario(); });
@@ -1821,18 +1854,87 @@ function renderDiaView(meals, goals, exercises){
   });
 }
 
-function renderSemanaView(meals, exercises){
+function evaluateMetric(consumido, objetivo){
+  if (!objetivo) return null;
+  const ratio = consumido / objetivo;
+  let estado, color;
+  if (ratio < 0.7){ estado = 'muy bajo'; color = 'var(--sem-red)'; }
+  else if (ratio < 0.9){ estado = 'bajo'; color = 'var(--sem-orange)'; }
+  else if (ratio <= 1.1){ estado = 'bien'; color = 'var(--sem-green)'; }
+  else if (ratio <= 1.3){ estado = 'alto'; color = 'var(--sem-orange)'; }
+  else { estado = 'muy alto'; color = 'var(--sem-red)'; }
+  return { ratio, estado, color };
+}
+
+function renderValoracion(totals, goals, periodo){
+  if (!goals) return '';
+  const metrics = [
+    { key:'kcal', label:'Kcal', val: totals.kcal, obj: goals.kcal },
+    { key:'prot', label:'Proteína', val: totals.prot, obj: goals.prot_g },
+    { key:'carb', label:'Carbohidratos', val: totals.carb, obj: goals.carb_g },
+    { key:'grasa', label:'Grasas', val: totals.grasa, obj: goals.grasa_g },
+    { key:'fibra', label:'Fibra', val: totals.fibra, obj: goals.fibra_g }
+  ].map(m => ({ ...m, ev: evaluateMetric(m.val, m.obj) })).filter(m => m.ev);
+
+  if (!metrics.length) return '';
+
+  const bienCount = metrics.filter(m => m.ev.estado === 'bien').length;
+  let overall, overallColor;
+  const sujeto = { 'día':'hoy', 'semana':'esta semana', 'mes':'este mes' }[periodo] || '';
+  if (bienCount >= metrics.length - 1){ overall = `Vas muy bien ${sujeto} 🎉`; overallColor = 'var(--sem-green)'; }
+  else if (bienCount >= Math.ceil(metrics.length/2)){ overall = `Razonablemente bien ${sujeto}, con algún ajuste pendiente.`; overallColor = 'var(--sem-orange)'; }
+  else { overall = `Bastante alejado del objetivo ${sujeto} — nada grave, pero conviene ajustar.`; overallColor = 'var(--sem-red)'; }
+
+  const sugerencias = [];
+  metrics.forEach(m => {
+    if (m.ev.estado === 'bien') return;
+    const dif = Math.round(Math.abs(m.val - m.obj));
+    if (!dif) return;
+    if (m.key === 'kcal'){
+      sugerencias.push(m.ev.ratio < 1 ? `Te faltan ~${dif} kcal para tu objetivo.` : `Te has pasado ~${dif} kcal de tu objetivo.`);
+    } else if (m.key === 'prot' && m.ev.ratio < 1){
+      sugerencias.push(`Te faltan ~${dif}g de proteína — prueba huevo, yogur, pollo o legumbres.`);
+    } else if (m.key === 'fibra' && m.ev.ratio < 1){
+      sugerencias.push(`Poca fibra (~${dif}g de menos) — fruta, verdura o legumbres ayudarían.`);
+    } else if (m.key === 'grasa' && m.ev.ratio > 1){
+      sugerencias.push(`Grasas algo altas (+${dif}g) — vigila fritos, salsas o embutidos.`);
+    } else if (m.key === 'carb'){
+      sugerencias.push(m.ev.ratio < 1 ? `Carbohidratos algo bajos (~${dif}g de menos).` : `Carbohidratos algo altos (+${dif}g).`);
+    }
+  });
+
+  return `
+    <div class="valoracion-box" style="border-left-color:${overallColor};">
+      <div class="val-overall" style="color:${overallColor};">${overall}</div>
+      <div class="val-metrics">
+        ${metrics.map(m => `<span class="val-chip" style="background:${m.ev.color};">${m.label}: ${m.ev.estado}</span>`).join('')}
+      </div>
+      ${sugerencias.length ? `<ul class="val-suggestions">${sugerencias.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>` : ''}
+      <p class="semaforo-note" style="margin-top:8px;">Orientativo, no es consejo médico ni nutricional profesional.</p>
+    </div>`;
+}
+
+function renderSemanaView(meals, exercises, goals){
   const monday = mondayOf(diarioRefDate);
   const days = Array.from({length:7}, (_,i) => addDays(monday,i));
   const dayData = days.map(d => {
     const key = dateKey(d);
-    const kcal = meals.filter(m => dateKey(new Date(m.timestamp)) === key).reduce((s,m) => s + (m.total_kcal||0), 0);
+    const dayMeals = meals.filter(m => dateKey(new Date(m.timestamp)) === key);
+    const kcal = dayMeals.reduce((s,m) => s + (m.total_kcal||0), 0);
+    const prot = dayMeals.reduce((s,m) => s + (m.total_proteinas_g||0), 0);
+    const carb = dayMeals.reduce((s,m) => s + (m.total_carbohidratos_g||0), 0);
+    const grasa = dayMeals.reduce((s,m) => s + (m.total_grasas_g||0), 0);
+    const fibra = dayMeals.reduce((s,m) => s + (m.total_fibra_g||0), 0);
     const quemado = (exercises||[]).filter(e => dateKey(new Date(e.timestamp)) === key).reduce((s,e) => s + (e.kcal_quemadas||0), 0);
-    return { kcal, quemado, neto: Math.max(0, kcal - quemado) };
+    return { kcal, prot, carb, grasa, fibra, quemado, neto: Math.max(0, kcal - quemado) };
   });
   const max = Math.max(...dayData.map(d => d.kcal), 1);
   const weekTotal = dayData.reduce((a,d) => a+d.kcal, 0);
   const weekQuemado = dayData.reduce((a,d) => a+d.quemado, 0);
+  const weekProt = dayData.reduce((a,d) => a+d.prot, 0);
+  const weekCarb = dayData.reduce((a,d) => a+d.carb, 0);
+  const weekGrasa = dayData.reduce((a,d) => a+d.grasa, 0);
+  const weekFibra = dayData.reduce((a,d) => a+d.fibra, 0);
   const rangeLabel = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
 
   diarioContent.innerHTML = `
@@ -1848,7 +1950,13 @@ function renderSemanaView(meals, exercises){
         const quemadoPct = (Math.min(dd.quemado, dd.kcal)/max*100).toFixed(1);
         return `
         <div class="week-row">
-          <div class="wr-top"><span>${DIAS_SEMANA[i]} ${d.getDate()}</span><span>${Math.round(dd.kcal)} kcal${dd.quemado ? ` <span style="color:var(--basil);">(−${Math.round(dd.quemado)} ejerc.)</span>` : ''}</span></div>
+          <div class="wr-top">
+            <span>${DIAS_SEMANA[i]} ${d.getDate()}</span>
+            <span>
+              <span style="color:var(--mango-dark);">${Math.round(dd.kcal)}</span>
+              ${dd.quemado ? ` <span style="color:var(--basil);">−${Math.round(dd.quemado)}</span> <span style="color:var(--ink-soft);">= ${Math.round(dd.neto)}</span>` : ''}
+            </span>
+          </div>
           <div class="wr-bar">
             <div class="wr-bar-fill" style="width:${netoPct}%"></div>
             ${dd.quemado ? `<div class="wr-bar-burn" style="width:${quemadoPct}%;left:${netoPct}%;"></div>` : ''}
@@ -1857,26 +1965,42 @@ function renderSemanaView(meals, exercises){
       }).join('')}
       <div class="total-row"><span class="lbl">Total semana</span><span class="val">${Math.round(weekTotal)} kcal</span></div>
       <div class="stat-row"><span>Media diaria</span><span>${Math.round(weekTotal/7)} kcal</span></div>
-      ${weekQuemado ? `<div class="stat-row"><span>Quemadas con ejercicio</span><span style="color:var(--basil);">−${Math.round(weekQuemado)} kcal</span></div>` : ''}
+      ${weekQuemado ? renderKcalBreakdown(weekTotal, weekQuemado) : ''}
       <div class="wr-legend"><span><i style="background:var(--mango);"></i> Consumido neto</span><span><i style="background:var(--basil);"></i> Cubierto por ejercicio</span></div>
     </div>
+    ${renderValoracion(
+      { kcal: Math.max(0, weekTotal - weekQuemado), prot: weekProt, carb: weekCarb, grasa: weekGrasa, fibra: weekFibra },
+      goals ? { kcal: goals.kcal*7, prot_g: goals.prot_g*7, carb_g: goals.carb_g*7, grasa_g: goals.grasa_g*7, fibra_g: goals.fibra_g*7 } : null,
+      'semana'
+    )}
   `;
   document.getElementById('wPrev').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,-7); refreshDiario(); });
   document.getElementById('wNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,7); refreshDiario(); });
 }
 
-function renderMesView(meals, exercises){
+function renderMesView(meals, exercises, goals){
   const year = diarioRefDate.getFullYear(), month = diarioRefDate.getMonth();
 
-  const byDayKcal = {};
-  meals.forEach(m => { const d = new Date(m.timestamp); if (d.getFullYear()===year && d.getMonth()===month){ const k = dateKey(d); byDayKcal[k] = (byDayKcal[k]||0) + (m.total_kcal||0); } });
-  const byDayQuemado = {};
+  const byDayKcal = {}, byDayQuemado = {};
+  let monthProt = 0, monthCarb = 0, monthGrasa = 0, monthFibra = 0;
+  meals.forEach(m => {
+    const d = new Date(m.timestamp);
+    if (d.getFullYear()===year && d.getMonth()===month){
+      const k = dateKey(d);
+      byDayKcal[k] = (byDayKcal[k]||0) + (m.total_kcal||0);
+      monthProt += m.total_proteinas_g||0;
+      monthCarb += m.total_carbohidratos_g||0;
+      monthGrasa += m.total_grasas_g||0;
+      monthFibra += m.total_fibra_g||0;
+    }
+  });
   (exercises||[]).forEach(ex => { const d = new Date(ex.timestamp); if (d.getFullYear()===year && d.getMonth()===month){ const k = dateKey(d); byDayQuemado[k] = (byDayQuemado[k]||0) + (ex.kcal_quemadas||0); } });
 
   const dayKeys = Object.keys(byDayKcal);
   const monthTotal = Object.values(byDayKcal).reduce((a,b) => a+b, 0);
   const monthQuemado = Object.values(byDayQuemado).reduce((a,b) => a+b, 0);
   const avg = dayKeys.length ? monthTotal / dayKeys.length : 0;
+  const numDiasConDatos = dayKeys.length || 1;
 
   const firstOfMonth = new Date(year, month, 1);
   const lastOfMonth = new Date(year, month+1, 0);
@@ -1892,7 +2016,7 @@ function renderMesView(meals, exercises){
     const kcal = byDayKcal[k];
     const quemado = byDayQuemado[k];
     cellsHtml += `
-      <div class="cal-day ${inMonth?'':'out'} ${k===todayKey?'today':''}">
+      <div class="cal-day ${inMonth?'':'out'} ${k===todayKey?'today':''}" data-key="${k}" style="cursor:pointer;">
         <div class="cal-daynum">${d.getDate()}</div>
         ${kcal ? `<div class="cal-kcal">${Math.round(kcal)}</div>` : ''}
         ${quemado ? `<div class="cal-burn">−${Math.round(quemado)}</div>` : ''}
@@ -1911,15 +2035,54 @@ function renderMesView(meals, exercises){
         ${cellsHtml}
       </div>
       <div class="wr-legend" style="margin-top:12px;"><span><i style="background:var(--mango-dark);"></i> Kcal ingeridas</span><span><i style="background:var(--basil);"></i> Kcal quemadas</span></div>
+      <p class="notes" style="margin-top:8px;">Toca un día para ver el detalle.</p>
     </div>
     <div class="card">
       <div class="total-row"><span class="lbl">Total del mes</span><span class="val">${Math.round(monthTotal)} kcal</span></div>
       <div class="stat-row"><span>Media / día con registros</span><span>${Math.round(avg)} kcal</span></div>
-      ${monthQuemado ? `<div class="stat-row"><span>Quemadas con ejercicio</span><span style="color:var(--basil);">−${Math.round(monthQuemado)} kcal</span></div>` : ''}
+      ${monthQuemado ? renderKcalBreakdown(monthTotal, monthQuemado) : ''}
     </div>
+    ${renderValoracion(
+      { kcal: Math.max(0, monthTotal - monthQuemado), prot: monthProt, carb: monthCarb, grasa: monthGrasa, fibra: monthFibra },
+      goals ? { kcal: goals.kcal*numDiasConDatos, prot_g: goals.prot_g*numDiasConDatos, carb_g: goals.carb_g*numDiasConDatos, grasa_g: goals.grasa_g*numDiasConDatos, fibra_g: goals.fibra_g*numDiasConDatos } : null,
+      'mes'
+    )}
   `;
   document.getElementById('mPrev').addEventListener('click', () => { diarioRefDate = new Date(year, month-1, 1); refreshDiario(); });
   document.getElementById('mNext').addEventListener('click', () => { diarioRefDate = new Date(year, month+1, 1); refreshDiario(); });
+  diarioContent.querySelectorAll('.cal-day').forEach(cell => {
+    cell.addEventListener('click', () => openDayDetailModal(cell.dataset.key, meals, exercises));
+  });
+}
+
+function openDayDetailModal(k, meals, exercises){
+  const dayMeals = meals.filter(m => dateKey(new Date(m.timestamp)) === k);
+  const dayEx = (exercises||[]).filter(e => dateKey(new Date(e.timestamp)) === k);
+  const totals = dayMeals.reduce((acc,m) => {
+    acc.kcal += m.total_kcal||0; acc.prot += m.total_proteinas_g||0;
+    acc.carb += m.total_carbohidratos_g||0; acc.grasa += m.total_grasas_g||0; acc.fibra += m.total_fibra_g||0;
+    return acc;
+  }, {kcal:0,prot:0,carb:0,grasa:0,fibra:0});
+  const quemado = dayEx.reduce((s,e) => s + (e.kcal_quemadas||0), 0);
+  const label = parseDateKey(k).toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
+
+  openModal(`
+    <div class="modal-head"><h3>${label}</h3><button class="modal-close" id="ddClose">✕</button></div>
+    ${dayMeals.length ? dayMeals.map(m => `
+      <div class="food-row">
+        <div class="food-name">${escapeHtml(m.nombre)} <span style="opacity:.5;font-size:10px;">(${SLOT_LABELS[m.slot]||'—'})</span></div>
+        <div class="food-kcal">${m.total_kcal} kcal</div>
+      </div>`).join('') : `<div class="empty-state">Sin comidas registradas.</div>`}
+
+    ${dayEx.length ? `
+      <h4 style="font-family:var(--font-display);font-size:14px;margin:14px 0 8px;">Ejercicio</h4>
+      ${dayEx.map(e => `<div class="food-row"><div class="food-name">${escapeHtml(e.actividad)}</div><div class="food-kcal" style="color:var(--basil);">−${Math.round(e.kcal_quemadas)} kcal</div></div>`).join('')}
+    ` : ''}
+
+    ${quemado ? renderKcalBreakdown(totals.kcal, quemado) : `<div class="total-row"><span class="lbl">Total</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>`}
+    ${renderMacroGrid({total_proteinas_g:totals.prot, total_carbohidratos_g:totals.carb, total_grasas_g:totals.grasa, total_fibra_g:totals.fibra})}
+  `);
+  document.getElementById('ddClose').addEventListener('click', closeModal);
 }
 
 /* ============================================================
