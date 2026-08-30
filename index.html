@@ -297,9 +297,9 @@
   .date-nav button{background:none;border:1.5px solid var(--ink);color:var(--ink);border-radius:3px;padding:6px 10px;font-family:inherit;cursor:pointer;font-size:16px;}
   .date-nav .date-label{font-family:var(--font-display);font-size:16.5px;font-weight:700;text-align:center;flex:1;}
   /* --- diario slot blocks --- */
-  .slot-block{margin-bottom:16px;}
-  .slot-block h4{font-family:ui-monospace,monospace;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:0 0 6px;display:flex;justify-content:space-between;}
-  .slot-empty{font-size:13.5px;color:var(--ink-soft);font-style:italic;padding:4px 0;}
+  .slot-card h4{font-family:ui-monospace,monospace;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:0 0 8px;display:flex;justify-content:space-between;}
+  .slot-empty{font-size:13.5px;color:var(--ink-soft);font-style:italic;padding:10px 6px;cursor:pointer;border:1.5px dashed var(--line);border-radius:var(--radius-sm);text-align:center;}
+  .slot-empty:active{opacity:.7;}
   /* --- week/month rows --- */
   .week-row{margin-bottom:12px;}
   .week-row .wr-top{display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;}
@@ -338,6 +338,12 @@
     padding:9px 12px;font-size:12px;color:var(--ink-soft);margin-bottom:16px;cursor:pointer;text-align:center;
   }
   .calib-hint:active{opacity:.7;}
+  .pending-banner{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+    background:var(--mango);color:#fff;border-radius:var(--radius-sm);padding:10px 12px;
+    font-size:12.5px;font-weight:700;margin-bottom:14px;
+  }
+  .pending-banner button{background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;}
   .wr-legend{display:flex;gap:14px;margin-top:12px;font-size:11px;color:var(--ink-soft);}
   .wr-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle;}
   .week-row .wr-bar-fill{height:100%;background:var(--mango);}
@@ -411,6 +417,7 @@
 
   <!-- ===================== CALCULADORA ===================== -->
   <div id="tab-calculadora" class="tab-panel">
+    <div class="pending-banner" id="pendingEntryBanner" hidden></div>
     <label style="display:block;font-family:var(--font-display);font-size:18px;margin-bottom:8px;">¿Qué vas a comer ahora?</label>
     <div class="mode-grid" id="calcModeToggle">
       <button class="active" data-mode="foto"><span class="mg-icon">📷</span><span>Sacar foto</span></button>
@@ -641,6 +648,31 @@ function guessSlot(){
   if (h < 23) return 'cena';
   return 'entre_horas';
 }
+
+/* ============================================================
+   ENTRADA PENDIENTE (rellenar una comida de otro día/franja)
+   ============================================================ */
+let pendingEntryDate = null;
+let pendingEntrySlot = null;
+
+function startRetroactiveEntry(dateKeyStr, slotKey){
+  pendingEntryDate = dateKeyStr;
+  pendingEntrySlot = slotKey;
+  if (!modalOverlay.hidden) closeModal();
+  showTab('calculadora');
+  renderPendingBanner();
+}
+function renderPendingBanner(){
+  const el = document.getElementById('pendingEntryBanner');
+  if (!pendingEntryDate){ el.hidden = true; return; }
+  const label = parseDateKey(pendingEntryDate).toLocaleDateString('es-ES', {day:'numeric', month:'short'});
+  el.hidden = false;
+  el.innerHTML = `<span>📅 Añadiendo a ${label}${pendingEntrySlot ? ' · '+SLOT_LABELS[pendingEntrySlot] : ''}</span><button id="cancelPendingBtn">Cancelar</button>`;
+  document.getElementById('cancelPendingBtn').addEventListener('click', () => {
+    pendingEntryDate = null; pendingEntrySlot = null; renderPendingBanner();
+  });
+}
+
 function escapeHtml(str){
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);
@@ -1025,11 +1057,14 @@ const tabPanels = { calculadora:'tab-calculadora', diario:'tab-diario', platos:'
 document.querySelectorAll('.tabbar button').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
+let currentTabName = 'calculadora';
 function showTab(name){
   Object.entries(tabPanels).forEach(([key, id]) => {
     document.getElementById(id).hidden = (key !== name);
   });
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  currentTabName = name;
+  if (name === 'calculadora') renderPendingBanner();
   if (name === 'diario') refreshDiario();
   if (name === 'platos') refreshPlatos();
   if (name === 'ingredientes') refreshIngredientes();
@@ -1547,7 +1582,7 @@ function finishManualEntry(){
 
 function renderCalcResult(parsed){
   const defaultName = defaultDishName(parsed.alimentos);
-  const defaultSlot = guessSlot();
+  const defaultSlot = pendingEntrySlot || guessSlot();
 
   resultCard.innerHTML = `
     ${renderFoodRows(parsed.alimentos)}
@@ -1598,7 +1633,12 @@ function renderCalcResult(parsed){
     }catch(err){ console.error('thumbnail', err); }
 
     const entry = {
-      timestamp: Date.now(),
+      timestamp: (() => {
+        if (!pendingEntryDate) return Date.now();
+        const d = parseDateKey(pendingEntryDate);
+        d.setHours(12, 0, 0, 0);
+        return d.getTime();
+      })(),
       slot: selectedSlot,
       nombre,
       foto: fotoFinal,
@@ -1634,6 +1674,9 @@ function renderCalcResult(parsed){
     const sameSlotToday = allMeals.filter(m => m.slot === selectedSlot && dateKey(new Date(m.timestamp)) === todayKey);
     const slotTotalKcal = sameSlotToday.reduce((s,m) => s + (m.total_kcal||0), 0);
     const esHoy = todayKey === dateKey(new Date());
+    pendingEntryDate = null;
+    pendingEntrySlot = null;
+    renderPendingBanner();
 
     btn.textContent = 'Guardado ✓';
     const msg = document.createElement('p');
@@ -1798,9 +1841,9 @@ function renderDiaView(meals, goals, exercises){
     const items = dayMeals.filter(m => m.slot === slotKey);
     const subtotal = items.reduce((s,m) => s + (m.total_kcal||0), 0);
     slotsHtml += `
-      <div class="slot-block">
+      <div class="card slot-card">
         <h4><span>${SLOT_LABELS[slotKey]}</span><span>${subtotal} kcal</span></h4>
-        ${items.length ? items.map(m => `<div class="food-row"><div class="food-name">${escapeHtml(m.nombre)}</div><div class="food-kcal">${m.total_kcal} kcal</div></div>`).join('') : `<div class="slot-empty">Sin registros</div>`}
+        ${items.length ? items.map(m => `<div class="food-row"><div class="food-name">${escapeHtml(m.nombre)}</div><div class="food-kcal">${m.total_kcal} kcal</div></div>`).join('') : `<div class="slot-empty" data-action="fill-slot" data-slot="${slotKey}">+ Sin registros — toca para añadir</div>`}
       </div>`;
   }
 
@@ -1816,7 +1859,7 @@ function renderDiaView(meals, goals, exercises){
             <span class="food-kcal">−${Math.round(e.kcal_quemadas)} kcal</span>
             <button class="lr-del" data-key="exercise:${e.timestamp}">✕</button>
           </div>
-        </div>`).join('') : `<div class="slot-empty">Sin ejercicio registrado hoy</div>`}
+        </div>`).join('') : `<div class="empty-state">Sin ejercicio registrado hoy</div>`}
       <button class="ghost" id="addExerciseBtn" style="margin-top:10px;">+ Añadir ejercicio</button>
     </div>`;
 
@@ -1826,8 +1869,8 @@ function renderDiaView(meals, goals, exercises){
       <div class="date-label">${isToday ? 'Hoy · ' : ''}${label}</div>
       <button id="dNext">›</button>
     </div>
+    ${slotsHtml}
     <div class="card">
-      ${slotsHtml}
       <div class="total-row"><span class="lbl">Total del día</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
       ${exerciseTotal ? renderKcalBreakdown(totals.kcal, exerciseTotal) : ''}
       ${renderMacroGrid({total_proteinas_g:totals.prot, total_carbohidratos_g:totals.carb, total_grasas_g:totals.grasa, total_fibra_g:totals.fibra})}
@@ -1859,6 +1902,9 @@ function renderDiaView(meals, goals, exercises){
   const gotoDatos = diarioContent.querySelector('[data-action="goto-datos"]');
   if (gotoDatos) gotoDatos.addEventListener('click', () => showTab('datos'));
   document.getElementById('addExerciseBtn').addEventListener('click', openExerciseModal);
+  diarioContent.querySelectorAll('[data-action="fill-slot"]').forEach(el => {
+    el.addEventListener('click', () => startRetroactiveEntry(key, el.dataset.slot));
+  });
   diarioContent.querySelectorAll('.lr-del').forEach(btn => {
     btn.addEventListener('click', async () => { await storageDelete(btn.dataset.key); refreshDiario(); });
   });
@@ -2114,13 +2160,19 @@ function openDayDetailModal(k, meals, exercises){
   const quemado = dayEx.reduce((s,e) => s + (e.kcal_quemadas||0), 0);
   const label = parseDateKey(k).toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
 
+  const slotsHtml = Object.keys(SLOT_LABELS).map(slotKey => {
+    const items = dayMeals.filter(m => m.slot === slotKey);
+    const subtotal = items.reduce((s,m) => s + (m.total_kcal||0), 0);
+    return `
+      <div class="slot-card">
+        <h4><span>${SLOT_LABELS[slotKey]}</span><span>${subtotal} kcal</span></h4>
+        ${items.length ? items.map(m => `<div class="food-row"><div class="food-name">${escapeHtml(m.nombre)}</div><div class="food-kcal">${m.total_kcal} kcal</div></div>`).join('') : `<div class="slot-empty" data-action="fill-slot-modal" data-slot="${slotKey}">+ Sin registros — toca para añadir</div>`}
+      </div>`;
+  }).join('');
+
   openModal(`
     <div class="modal-head"><h3>${label}</h3><button class="modal-close" id="ddClose">✕</button></div>
-    ${dayMeals.length ? dayMeals.map(m => `
-      <div class="food-row">
-        <div class="food-name">${escapeHtml(m.nombre)} <span style="opacity:.5;font-size:10.5px;">(${SLOT_LABELS[m.slot]||'—'})</span></div>
-        <div class="food-kcal">${m.total_kcal} kcal</div>
-      </div>`).join('') : `<div class="empty-state">Sin comidas registradas.</div>`}
+    ${slotsHtml}
 
     ${dayEx.length ? `
       <h4 style="font-family:var(--font-display);font-size:15px;margin:14px 0 8px;">Ejercicio</h4>
@@ -2130,6 +2182,9 @@ function openDayDetailModal(k, meals, exercises){
     ${quemado ? renderKcalBreakdown(totals.kcal, quemado) : `<div class="total-row"><span class="lbl">Total</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>`}
     ${renderMacroGrid({total_proteinas_g:totals.prot, total_carbohidratos_g:totals.carb, total_grasas_g:totals.grasa, total_fibra_g:totals.fibra})}
   `);
+  document.querySelectorAll('[data-action="fill-slot-modal"]').forEach(el => {
+    el.addEventListener('click', () => startRetroactiveEntry(k, el.dataset.slot));
+  });
   document.getElementById('ddClose').addEventListener('click', closeModal);
 }
 
@@ -2166,6 +2221,7 @@ async function refreshPlatos(){
         </div>
         <div class="lr-right">
           <span class="lr-kcal">${m.total_kcal} kcal</span>
+          <button class="lr-del" data-action="edit" title="Editar">✏️</button>
           <button class="lr-del" data-action="delete">✕</button>
         </div>
       </div>
@@ -2186,13 +2242,76 @@ async function refreshPlatos(){
       }
     });
   });
+  platosList.querySelectorAll('[data-action="edit"]').forEach(el => {
+    el.addEventListener('click', () => openEditMealModal(el.closest('.list-row').dataset.key));
+  });
   platosList.querySelectorAll('[data-action="delete"]').forEach(el => {
     el.addEventListener('click', async () => {
       const key = el.closest('.list-row').dataset.key;
+      const meal = filtered.find(m => m.key === key);
+      if (!confirm(`¿Seguro que quieres borrar "${meal ? meal.nombre : 'este plato'}"? También desaparecerá de tu diario.`)) return;
       await storageDelete(key);
       refreshPlatos();
     });
   });
+}
+
+async function openEditMealModal(mealKey){
+  const meal = await storageGet(mealKey);
+  if (!meal) return;
+  let newFoto = meal.foto || '';
+
+  function render(){
+    openModal(`
+      <div class="modal-head"><h3>Editar plato</h3><button class="modal-close" id="emClose">✕</button></div>
+      <div class="field"><label>Nombre</label><input type="text" id="emNombre" value="${escapeHtml(meal.nombre)}"></div>
+      <div class="field">
+        <label>¿Para qué comida es?</label>
+        <div class="pill-group" id="emSlotPills">
+          ${Object.entries(SLOT_LABELS).map(([k,l]) => `<button type="button" class="pill ${meal.slot===k?'active':''}" data-val="${k}">${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <label>Foto</label>
+        ${newFoto ? `<img src="${newFoto}" style="width:100%;border-radius:var(--radius-md);border:var(--border-w) solid var(--ink);margin-bottom:8px;" alt="">` : ''}
+        <button class="ghost" type="button" id="emPhotoBtn">📷 ${newFoto ? 'Cambiar foto' : 'Añadir foto'}</button>
+        <input type="file" id="emPhotoInput" accept="image/*" capture="environment" hidden>
+      </div>
+      <button class="primary" id="emSaveBtn">Guardar cambios</button>
+      <div id="emStatus"></div>
+    `);
+    document.getElementById('emClose').addEventListener('click', closeModal);
+    setupPillGroup('emSlotPills');
+    document.getElementById('emPhotoBtn').addEventListener('click', () => document.getElementById('emPhotoInput').click());
+    document.getElementById('emPhotoInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const raw = await fileToDataUrl(file);
+      newFoto = await makeThumbnail(raw, 220);
+      render();
+    });
+    document.getElementById('emSaveBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('emSaveBtn');
+      btn.disabled = true;
+      meal.nombre = document.getElementById('emNombre').value.trim() || meal.nombre;
+      meal.slot = pillGroupValue('emSlotPills') || meal.slot;
+      meal.foto = newFoto;
+      let ok = await storageSet(mealKey, meal);
+      if (!ok && meal.foto){
+        const sinFoto = { ...meal, foto: '' };
+        ok = await storageSet(mealKey, sinFoto);
+        if (ok) meal.foto = '';
+      }
+      if (ok){
+        closeModal();
+        refreshPlatos();
+      } else {
+        btn.disabled = false;
+        document.getElementById('emStatus').innerHTML = `<div class="error">No se pudo guardar — puede que no haya espacio suficiente.</div>`;
+      }
+    });
+  }
+  render();
 }
 
 /* ============================================================
