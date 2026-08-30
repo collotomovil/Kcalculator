@@ -41,7 +41,6 @@
     --radius-lg:22px;
     --radius-md:16px;
     --radius-pill:16px;
-    --radius-modal:22px 22px 0 0;
     --radius-sm:10px;
     --border-w:3px;
     --shadow-card:4px 4px 0 var(--ink);
@@ -86,7 +85,6 @@
     --radius-lg:28px;
     --radius-md:22px;
     --radius-pill:20px;
-    --radius-modal:28px 28px 0 0;
     --radius-sm:14px;
     --border-w:0px;
     --shadow-card:0 10px 28px rgba(90,70,150,.14);
@@ -275,10 +273,10 @@
   .semaforo-big.red{background:var(--sem-red);}
   .semaforo-note{font-size:11px;color:var(--ink-soft);font-style:italic;margin-top:4px;}
   /* --- tab bar (arriba) --- */
-  .tabbar{position:sticky;top:0;background:var(--paper);border-bottom:var(--border-w) solid var(--ink);display:flex;z-index:10;margin:0 0 18px;border-radius:0 0 var(--radius-lg) var(--radius-lg);box-shadow:var(--shadow-card);}
-  html[data-style="nube"] .tabbar{ border-bottom:none; }
-  .tabbar button{flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 1px 7px;font-family:inherit;font-size:8.8px;color:var(--ink-soft);cursor:pointer;}
-  .tabbar button svg{width:17px;height:17px;stroke:var(--ink-soft);fill:none;}
+  .tabbar{position:sticky;top:0;background:var(--paper);border:var(--border-w) solid var(--ink);display:flex;z-index:10;margin:0 0 18px;border-radius:var(--radius-lg);box-shadow:var(--shadow-card);overflow:hidden;}
+  html[data-style="nube"] .tabbar{ border:none; }
+  .tabbar button{flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 2px 10px;font-family:var(--font-display);font-weight:700;font-size:10.5px;color:var(--ink-soft);cursor:pointer;line-height:1.15;}
+  .tabbar button svg{width:24px;height:24px;stroke:var(--ink-soft);fill:none;}
   .tabbar button.active{color:var(--mango-dark);font-weight:700;}
   .tabbar button.active svg{stroke:var(--mango-dark);}
   /* --- objetivos (diario) --- */
@@ -296,7 +294,7 @@
   .goal-empty a{color:var(--mango-dark);cursor:pointer;}
   /* --- date nav --- */
   .date-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;}
-  .date-nav button{background:none;border:1.5px solid var(--ink);border-radius:3px;padding:6px 10px;font-family:inherit;cursor:pointer;font-size:15px;}
+  .date-nav button{background:none;border:1.5px solid var(--ink);color:var(--ink);border-radius:3px;padding:6px 10px;font-family:inherit;cursor:pointer;font-size:16px;}
   .date-nav .date-label{font-family:var(--font-display);font-size:16.5px;font-weight:700;text-align:center;flex:1;}
   /* --- diario slot blocks --- */
   .slot-block{margin-bottom:16px;}
@@ -358,9 +356,9 @@
   .plan-cell b{font-family:ui-monospace,monospace;color:var(--mango-dark);}
   .plan-total-cell{font-family:ui-monospace,monospace;font-weight:700;background:var(--stone);}
   /* --- modal --- */
-  .modal-overlay{position:fixed;inset:0;background:rgba(43,42,40,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(43,42,40,0.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
   .modal-overlay[hidden]{display:none;}
-  .modal-box{background:var(--paper);width:100%;max-width:460px;border-radius:var(--radius-modal);padding:20px;max-height:82vh;overflow-y:auto;border-top:var(--border-w) solid var(--ink);}
+  .modal-box{background:var(--paper);width:100%;max-width:420px;border-radius:var(--radius-lg);padding:20px;max-height:80vh;overflow-y:auto;border:var(--border-w) solid var(--ink);box-shadow:var(--shadow-card);}
   .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
   .modal-head h3{font-family:var(--font-display);font-size:21px;margin:0;}
   .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);}
@@ -420,7 +418,7 @@
       <button data-mode="crear"><span class="mg-icon">🧩</span><span>Crearlo yo mismo</span></button>
     </div>
 
-    <div class="calib-hint" id="calibHintBtn">⚖️ Puedes calibrar tu plato para mayor exactitud →</div>
+    <div class="calib-hint" id="calibHintBtn">⚖️ Calibra tu plato para mayor exactitud</div>
 
     <div class="card capture-zone" id="captureCard">
       <label class="camera-btn" for="foodPhoto" id="cameraLabel">
@@ -2625,18 +2623,22 @@ async function importBackup(file){
 
 document.getElementById('calibHintBtn').addEventListener('click', () => openCalibModal());
 
-document.getElementById('settingsBtn').addEventListener('click', async () => {
+document.getElementById('calibHintBtn').addEventListener('click', () => openSettingsModal('calibSectionAjustes'));
+document.getElementById('settingsBtn').addEventListener('click', () => openSettingsModal());
+
+async function openSettingsModal(focusId){
   const s = await getSettings();
   openModal(`
     <div class="modal-head"><h3>Ajustes</h3><button class="modal-close" id="sClose">✕</button></div>
-    <div class="notes" style="margin-bottom:14px;">Necesitas una clave gratuita de Gemini para el reconocimiento de fotos por IA. Consíguela en <b>aistudio.google.com/apikey</b> (gratis, sin tarjeta). Si prefieres no usar IA, puedes dejar esto vacío y usar siempre "Buscar alimento" en la Calculadora.</div>
+    <div class="notes" style="margin-bottom:10px;">Necesitas una clave gratuita de Gemini para el reconocimiento de fotos por IA. Si prefieres no usar IA, puedes dejar esto vacío y usar siempre "Crearlo yo mismo" en la Calculadora.</div>
+    <button class="ghost" id="apiKeyHelpBtn" style="margin-bottom:14px;">🔑 Conseguir clave API</button>
     <div class="field"><label>Clave de la API de Gemini</label><input type="password" id="sGeminiKey" value="${escapeHtml(s.geminiKey||'')}" placeholder="AIza…"></div>
     <div class="field"><label>Modelo (opcional, por si Google cambia el nombre)</label><input type="text" id="sGeminiModel" value="${escapeHtml(s.geminiModel||'gemini-3.6-flash')}"></div>
     <p class="notes" style="margin-top:-6px;margin-bottom:14px;">Por defecto uso <b>gemini-3.6-flash</b> (gratis, estable). Si quieres probar el modelo más nuevo de Google, escribe <b>gemini-3.7-flash</b> aquí — es más capaz y también tiene uso gratuito, pero al ser tan reciente su límite diario gratuito puede ser más estricto y cambiar sin aviso.</p>
     <button class="primary" id="sSaveBtn">Guardar</button>
     <div id="sSaveStatus"></div>
 
-    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
+    <div id="calibSectionAjustes" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
       <h3 style="font-size:16px;margin:0 0 8px;">Calibrar mis platos</h3>
       <p class="notes" style="margin-bottom:12px;">Para que la IA estime mejor las cantidades, puedes enseñarle cómo son tus platos: haz una foto de tu plato llano y de tu hondo con alimentos que hayas pesado tú mismo. A partir de ahí, cada vez que fotografíes una comida, la app le pasa esas referencias a la IA para que sepa qué cantidad exacta corresponde a "lleno" en cada uno de tus platos, y calcule mejor aunque cambien los alimentos.</p>
       <button class="ghost" id="openCalibBtn">⚖️ Calibrar mis platos</button>
@@ -2651,6 +2653,7 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
       <div id="sBackupStatus"></div>
     </div>
   `);
+  document.getElementById('apiKeyHelpBtn').addEventListener('click', () => openApiKeyHelpModal());
   document.getElementById('openCalibBtn').addEventListener('click', () => openCalibModal());
   document.getElementById('sClose').addEventListener('click', closeModal);
   document.getElementById('sSaveBtn').addEventListener('click', async () => {
@@ -2680,7 +2683,31 @@ document.getElementById('settingsBtn').addEventListener('click', async () => {
       document.getElementById('sBackupStatus').innerHTML = `<div class="error">No se pudo leer el archivo. ¿Es una copia de seguridad válida?</div>`;
     }
   });
-});
+
+  if (focusId){
+    setTimeout(() => {
+      const el = document.getElementById(focusId);
+      if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 80);
+  }
+}
+
+function openApiKeyHelpModal(){
+  openModal(`
+    <div class="modal-head"><h3>Conseguir clave API</h3><button class="modal-close" id="ahClose">✕</button></div>
+    <p class="notes" style="margin-bottom:12px;">Es gratis y no pide tarjeta. Pasos:</p>
+    <ol style="padding-left:20px;font-size:13.5px;line-height:1.9;color:var(--ink);">
+      <li>Entra en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="font-weight:700;color:var(--mango-dark);">aistudio.google.com</a> e inicia sesión con tu cuenta de Google.</li>
+      <li>Pulsa el botón <b>"Get API key"</b> (o "Crear clave de API").</li>
+      <li>Si te lo pide, elige <b>"Create API key in new project"</b> — no hace falta configurar nada más.</li>
+      <li>Copia la clave que empieza por <b>AIza…</b></li>
+      <li>Vuelve aquí y pégala en el campo "Clave de la API de Gemini".</li>
+    </ol>
+    <button class="primary" id="ahCloseBtn" style="margin-top:8px;">Entendido</button>
+  `);
+  document.getElementById('ahClose').addEventListener('click', closeModal);
+  document.getElementById('ahCloseBtn').addEventListener('click', closeModal);
+}
 
 /* ============================================================
    INIT
