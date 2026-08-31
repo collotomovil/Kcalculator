@@ -167,6 +167,14 @@
     margin:0 0 16px;
   }
   .tab-panel[hidden]{display:none;}
+  .tab-panel{touch-action:pan-y;}
+  .tab-panel.slide-in-right{animation:tabSlideInRight .28s ease-out;}
+  .tab-panel.slide-in-left{animation:tabSlideInLeft .28s ease-out;}
+  @keyframes tabSlideInRight{ from{ transform:translateX(28px); opacity:0; } to{ transform:translateX(0); opacity:1; } }
+  @keyframes tabSlideInLeft{ from{ transform:translateX(-28px); opacity:0; } to{ transform:translateX(0); opacity:1; } }
+  @media (prefers-reduced-motion: reduce){
+    .tab-panel.slide-in-right, .tab-panel.slide-in-left{ animation:none; }
+  }
   .card{
     background:var(--paper);
     border:var(--border-w) solid var(--ink);
@@ -1082,12 +1090,23 @@ document.querySelectorAll('.tabbar button').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
 let currentTabName = 'calculadora';
-function showTab(name){
+function showTab(name, direction){
   Object.entries(tabPanels).forEach(([key, id]) => {
-    document.getElementById(id).hidden = (key !== name);
+    const el = document.getElementById(id);
+    el.hidden = (key !== name);
+    el.classList.remove('slide-in-right', 'slide-in-left');
   });
   document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   currentTabName = name;
+  if (direction){
+    const activeEl = document.getElementById(tabPanels[name]);
+    if (activeEl){
+      activeEl.classList.add(direction === 'next' ? 'slide-in-right' : 'slide-in-left');
+      activeEl.addEventListener('animationend', () => {
+        activeEl.classList.remove('slide-in-right', 'slide-in-left');
+      }, { once: true });
+    }
+  }
   if (name === 'calculadora') renderPendingBanner();
   if (name === 'diario') refreshDiario();
   if (name === 'platos') refreshPlatos();
@@ -1112,8 +1131,8 @@ document.querySelector('.app').addEventListener('touchend', (e) => {
   swipeStartX = null; swipeStartY = null;
   if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
   const idx = TAB_ORDER.indexOf(currentTabName);
-  if (dx < 0 && idx < TAB_ORDER.length - 1) showTab(TAB_ORDER[idx + 1]);
-  else if (dx > 0 && idx > 0) showTab(TAB_ORDER[idx - 1]);
+  if (dx < 0 && idx < TAB_ORDER.length - 1) showTab(TAB_ORDER[idx + 1], 'next');
+  else if (dx > 0 && idx > 0) showTab(TAB_ORDER[idx - 1], 'prev');
 }, { passive:true });
 
 /* ============================================================
