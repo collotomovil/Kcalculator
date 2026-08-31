@@ -35,6 +35,7 @@
     --line:#DCEAF3;
     --danger:#D93B30;
     --sem-green:#3E9B5C;
+    --sem-yellow:#D9B84A;
     --sem-orange:#D98B2E;
     --sem-red:#D93B30;
 
@@ -61,6 +62,7 @@
     --line:#2C3F4F;
     --danger:#FF6B60;
     --sem-green:#6FE08F;
+    --sem-yellow:#F0D45E;
     --sem-orange:#F0B24E;
     --sem-red:#FF6B60;
     --shadow-card:4px 4px 0 #0A1219;
@@ -79,6 +81,7 @@
     --line:#F1EEFA;
     --danger:#FF6B6B;
     --sem-green:#3FAE9E;
+    --sem-yellow:#D9C24E;
     --sem-orange:#E5A94E;
     --sem-red:#FF6B6B;
 
@@ -105,6 +108,7 @@
     --line:#332C55;
     --danger:#FF8F8F;
     --sem-green:#63D9C6;
+    --sem-yellow:#F0DE68;
     --sem-orange:#F0C168;
     --sem-red:#FF8F8F;
     --shadow-card:0 10px 28px rgba(0,0,0,.4);
@@ -287,9 +291,13 @@
   .goal-row .gr-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;}
   .goal-row .gr-top .gr-label{color:var(--ink-soft);text-transform:uppercase;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.03em;}
   .goal-row .gr-top .gr-val{font-family:ui-monospace,monospace;}
-  .goal-row .gr-bar{height:7px;background:var(--line);border-radius:4px;overflow:hidden;}
-  .goal-row .gr-bar-fill{height:100%;background:var(--mango);}
+  .goal-row .gr-bar{position:relative;height:22px;background:var(--line);border-radius:6px;overflow:hidden;}
+  .goal-row .gr-bar-fill{height:100%;background:var(--sem-green);transition:width .3s;}
   .goal-row .gr-bar-fill.over{background:var(--danger);}
+  .goal-row .gr-bar-extra{position:absolute;top:0;left:0;height:100%;background:var(--ink-soft);opacity:.55;}
+  .goal-row .gr-mark{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,.25);z-index:2;}
+  html[data-theme="dark"] .goal-row .gr-mark{background:rgba(255,255,255,.3);}
+  .goal-row .gr-slot-label{position:absolute;top:0;height:100%;display:flex;align-items:center;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--paper);text-shadow:0 1px 1px rgba(0,0,0,.35);pointer-events:none;padding-left:3px;white-space:nowrap;overflow:hidden;z-index:1;}
   .goal-empty{font-size:13px;color:var(--ink-soft);font-style:italic;}
   .goal-empty a{color:var(--mango-dark);cursor:pointer;}
   /* --- date nav --- */
@@ -1358,6 +1366,111 @@ function mealToManualItems(meal){
     };
   });
 }
+function openEditMealIngredientsModal(mealKey){
+  let items = [];
+  let meal = null;
+  let statusMsg = '';
+
+  function computeTotals(){
+    return items.reduce((acc, i) => {
+      acc.kcal += i.kcal_100g * i.gramos / 100;
+      acc.prot += i.proteinas_100g * i.gramos / 100;
+      acc.carb += i.carbohidratos_100g * i.gramos / 100;
+      acc.grasa += i.grasas_100g * i.gramos / 100;
+      acc.fibra += i.fibra_100g * i.gramos / 100;
+      return acc;
+    }, {kcal:0,prot:0,carb:0,grasa:0,fibra:0});
+  }
+
+  function render(){
+    const totals = computeTotals();
+    openModal(`
+      <div class="modal-head"><h3>Editar ingredientes</h3><button class="modal-close" id="emiClose">✕</button></div>
+      <p class="notes" style="margin:0 0 10px;">Quita lo que no te comiste o ajusta las cantidades. Los totales del plato se recalculan solos.</p>
+      <div id="emiList">
+        ${items.length ? items.map((i, idx) => `
+          <div class="food-row">
+            <div style="cursor:pointer;" data-action="edit" data-idx="${idx}">
+              <div class="food-name">${escapeHtml(i.nombre)} <span style="opacity:.5;">✏️</span></div>
+              <div class="food-meta">${i.gramos} g</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
+              <button class="lr-del" data-action="remove" data-idx="${idx}">✕</button>
+            </div>
+          </div>`).join('') : `<div class="empty-state">Sin ingredientes — el plato quedaría vacío.</div>`}
+      </div>
+      <div class="total-row" style="margin-top:8px;"><span class="lbl">Total</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
+      <button class="primary" id="emiSaveBtn" style="margin-top:10px;">Guardar cambios</button>
+      <div id="emiStatus">${statusMsg}</div>
+    `);
+    document.getElementById('emiClose').addEventListener('click', closeModal);
+    document.querySelectorAll('#emiList [data-action="remove"]').forEach(btn => {
+      btn.addEventListener('click', () => { items.splice(parseInt(btn.dataset.idx),1); render(); });
+    });
+    document.querySelectorAll('#emiList [data-action="edit"]').forEach(el => {
+      el.addEventListener('click', () => openEditMealIngredientLineModal(parseInt(el.dataset.idx)));
+    });
+    document.getElementById('emiSaveBtn').addEventListener('click', saveChanges);
+  }
+
+  function openEditMealIngredientLineModal(idx){
+    const item = items[idx];
+    openModal(`
+      <div class="modal-head"><h3>Editar ingrediente</h3><button class="modal-close" id="emilClose">✕</button></div>
+      <div class="field"><label>Nombre</label><input type="text" id="emilNombre" value="${escapeHtml(item.nombre)}"></div>
+      <div class="field"><label>Cantidad (g)</label><input type="number" id="emilGramos" value="${item.gramos}" inputmode="decimal"></div>
+      <div class="field"><label>Kcal / 100g</label><input type="number" id="emilKcal100" value="${item.kcal_100g}" inputmode="decimal"></div>
+      <button class="primary" id="emilSaveBtn">Guardar cambios</button>
+    `);
+    document.getElementById('emilClose').addEventListener('click', render);
+    document.getElementById('emilSaveBtn').addEventListener('click', () => {
+      items[idx] = {
+        ...item,
+        nombre: document.getElementById('emilNombre').value.trim() || item.nombre,
+        gramos: parseFloat(document.getElementById('emilGramos').value) || item.gramos,
+        kcal_100g: parseFloat(document.getElementById('emilKcal100').value) || item.kcal_100g
+      };
+      render();
+    });
+  }
+
+  async function saveChanges(){
+    const btn = document.getElementById('emiSaveBtn');
+    btn.disabled = true;
+    const totals = computeTotals();
+    const updated = {
+      ...meal,
+      alimentos: items.map(i => ({
+        nombre: i.nombre,
+        cantidad_estimada: `${i.gramos} g`,
+        kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
+      })),
+      total_kcal: Math.round(totals.kcal),
+      total_proteinas_g: Math.round(totals.prot),
+      total_carbohidratos_g: Math.round(totals.carb),
+      total_grasas_g: Math.round(totals.grasa),
+      total_fibra_g: Math.round(totals.fibra)
+    };
+    const ok = await storageSet(mealKey, updated);
+    if (ok){
+      closeModal();
+      refreshDiario();
+    } else {
+      statusMsg = `<div class="error-box">No se ha podido guardar. Inténtalo de nuevo.</div>`;
+      btn.disabled = false;
+      render();
+    }
+  }
+
+  (async () => {
+    meal = await storageGet(mealKey);
+    if (!meal){ return; }
+    items = mealToManualItems(meal);
+    render();
+  })();
+}
+
 async function renderRepeatList(){
   const query = document.getElementById('repeatSearchInput').value.trim().toLowerCase();
   const meals = await loadAllMeals();
@@ -1847,12 +1960,36 @@ async function openExerciseModal(){
   });
 }
 
-function renderGoalRow(label, value, target, unit){
-  const pct = Math.min(100, Math.round((value/target)*100)) || 0;
-  const over = value > target;
+const SLOT_SHARE = { desayuno: 0.25, comida: 0.40, cena: 0.35 };
+function semColorForRatio(value, target, toleranciaAbs){
+  const ev = evaluateMetric(value, target, toleranciaAbs);
+  if (!ev) return 'var(--sem-green)';
+  return ev.color;
+}
+function renderGoalRow(label, value, target, unit, bySlot, toleranciaAbs){
+  const pctMain = Math.min(100, (value/target)*100) || 0;
+  const semColor = semColorForRatio(value, target, toleranciaAbs);
+  let marksHtml = '', labelsHtml = '', extraHtml = '';
+  if (bySlot){
+    let acc = 0;
+    const mainSlots = ['desayuno','comida','cena'];
+    mainSlots.forEach((slotKey, i) => {
+      if (i > 0) marksHtml += `<div class="gr-mark" style="left:${acc}%;"></div>`;
+      const share = SLOT_SHARE[slotKey] * 100;
+      labelsHtml += `<span class="gr-slot-label" style="left:${acc}%;width:${share}%;">${SLOT_LABELS[slotKey]}</span>`;
+      acc += share;
+    });
+    const entreHorasVal = bySlot.entre_horas || 0;
+    const extraPct = entreHorasVal > 0 ? Math.min(100 - pctMain, (entreHorasVal/target)*100) : 0;
+    if (extraPct > 0) extraHtml = `<div class="gr-bar-extra" style="left:${pctMain}%;width:${extraPct}%;"></div>`;
+  }
   return `<div class="goal-row">
     <div class="gr-top"><span class="gr-label">${label}</span><span class="gr-val">${Math.round(value)}${unit} / ${Math.round(target)}${unit}</span></div>
-    <div class="gr-bar"><div class="gr-bar-fill ${over?'over':''}" style="width:${pct}%;"></div></div>
+    <div class="gr-bar">
+      <div class="gr-bar-fill" style="width:${pctMain}%;background:${semColor};"></div>
+      ${extraHtml}
+      ${bySlot ? marksHtml + labelsHtml : ''}
+    </div>
   </div>`;
 }
 
@@ -1867,6 +2004,19 @@ function renderDiaView(meals, goals, exercises){
     return acc;
   }, {kcal:0,prot:0,carb:0,grasa:0,fibra:0});
 
+  function bySlotFor(field){
+    const out = {};
+    for (const slotKey of Object.keys(SLOT_LABELS)){
+      out[slotKey] = dayMeals.filter(m => m.slot === slotKey).reduce((s,m) => s + (m[field]||0), 0);
+    }
+    return out;
+  }
+  const bySlotKcal = bySlotFor('total_kcal');
+  const bySlotProt = bySlotFor('total_proteinas_g');
+  const bySlotCarb = bySlotFor('total_carbohidratos_g');
+  const bySlotGrasa = bySlotFor('total_grasas_g');
+  const bySlotFibra = bySlotFor('total_fibra_g');
+
   const exerciseTotal = (exercises||[]).reduce((s,e) => s + (e.kcal_quemadas||0), 0);
   const netKcal = Math.max(0, Math.round(totals.kcal - exerciseTotal));
 
@@ -1879,7 +2029,7 @@ function renderDiaView(meals, goals, exercises){
     slotsHtml += `
       <div class="slot-card">
         <h4><span>${SLOT_LABELS[slotKey]}</span><span>${subtotal} kcal</span></h4>
-        ${items.length ? items.map(m => `<div class="food-row"><div class="food-name">${escapeHtml(m.nombre)}</div><div class="food-kcal">${m.total_kcal} kcal</div></div>`).join('') : `<div class="slot-empty" data-action="fill-slot" data-slot="${slotKey}">+ Sin registros — toca para añadir</div>`}
+        ${items.length ? items.map(m => `<div class="food-row"><div class="food-name" style="cursor:pointer;" data-action="edit-meal-items" data-key="meals:${m.timestamp}">${escapeHtml(m.nombre)} <span style="opacity:.5;">✏️</span></div><div class="food-kcal">${m.total_kcal} kcal</div></div>`).join('') : `<div class="slot-empty" data-action="fill-slot" data-slot="${slotKey}">+ Sin registros — toca para añadir</div>`}
       </div>`;
   }
 
@@ -1915,11 +2065,11 @@ function renderDiaView(meals, goals, exercises){
     ${goals ? `
       <div class="goal-box">
         <h4>Objetivo del día</h4>
-        ${renderGoalRow('Kcal netas' + (exerciseTotal ? ' (consumidas − ejercicio)' : ''), netKcal, goals.kcal, '')}
-        ${renderGoalRow('Proteína', totals.prot, goals.prot_g, 'g')}
-        ${renderGoalRow('Carbohidratos', totals.carb, goals.carb_g, 'g')}
-        ${renderGoalRow('Grasas', totals.grasa, goals.grasa_g, 'g')}
-        ${renderGoalRow('Fibra', totals.fibra, goals.fibra_g, 'g')}
+        ${renderGoalRow('Kcal netas' + (exerciseTotal ? ' (consumidas − ejercicio)' : ''), netKcal, goals.kcal, '', bySlotKcal, Math.max(300, goals.kcal*0.12))}
+        ${renderGoalRow('Proteína', totals.prot, goals.prot_g, 'g', bySlotProt, 0)}
+        ${renderGoalRow('Carbohidratos', totals.carb, goals.carb_g, 'g', bySlotCarb, 0)}
+        ${renderGoalRow('Grasas', totals.grasa, goals.grasa_g, 'g', bySlotGrasa, 0)}
+        ${renderGoalRow('Fibra', totals.fibra, goals.fibra_g, 'g', bySlotFibra, 0)}
       </div>
     ` : `
       <div class="goal-box">
@@ -1940,6 +2090,9 @@ function renderDiaView(meals, goals, exercises){
   document.getElementById('addExerciseBtn').addEventListener('click', openExerciseModal);
   diarioContent.querySelectorAll('[data-action="fill-slot"]').forEach(el => {
     el.addEventListener('click', () => startRetroactiveEntry(key, el.dataset.slot));
+  });
+  diarioContent.querySelectorAll('[data-action="edit-meal-items"]').forEach(el => {
+    el.addEventListener('click', () => openEditMealIngredientsModal(el.dataset.key));
   });
   diarioContent.querySelectorAll('.lr-del').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1994,40 +2147,52 @@ function countLoggedExpectedSlots(daysArray, meals){
   return registrados;
 }
 
-function evaluateMetric(consumido, objetivo){
+function evaluateMetric(consumido, objetivo, toleranciaAbs){
   if (!objetivo) return null;
+  const diff = consumido - objetivo;
   const ratio = consumido / objetivo;
+  const tol = toleranciaAbs || 0;
+  if (Math.abs(diff) <= tol){
+    return { ratio, estado: 'bien', color: 'var(--sem-green)' };
+  }
+  const ratioAjustado = 1 + (diff - Math.sign(diff) * tol) / objetivo;
   let estado, color;
-  if (ratio < 0.7){ estado = 'muy bajo'; color = 'var(--sem-red)'; }
-  else if (ratio < 0.9){ estado = 'bajo'; color = 'var(--sem-orange)'; }
-  else if (ratio <= 1.1){ estado = 'bien'; color = 'var(--sem-green)'; }
-  else if (ratio <= 1.3){ estado = 'alto'; color = 'var(--sem-orange)'; }
+  if (ratioAjustado < 0.75){ estado = 'muy bajo'; color = 'var(--sem-red)'; }
+  else if (ratioAjustado < 0.9){ estado = 'bajo'; color = 'var(--sem-orange)'; }
+  else if (ratioAjustado < 1){ estado = 'ligeramente bajo'; color = 'var(--sem-yellow)'; }
+  else if (ratioAjustado <= 1.1){ estado = 'bien'; color = 'var(--sem-green)'; }
+  else if (ratioAjustado <= 1.2){ estado = 'ligeramente alto'; color = 'var(--sem-yellow)'; }
+  else if (ratioAjustado <= 1.3){ estado = 'alto'; color = 'var(--sem-orange)'; }
   else { estado = 'muy alto'; color = 'var(--sem-red)'; }
   return { ratio, estado, color };
 }
 
 function renderValoracion(totals, goalsEsperado, periodo, enCurso){
   if (!goalsEsperado) return '';
+  const kcalTolerancia = Math.max(300, (goalsEsperado.kcal || 0) * 0.12);
   const metrics = [
-    { key:'kcal', label:'Kcal', val: totals.kcal, obj: goalsEsperado.kcal },
-    { key:'prot', label:'Proteína', val: totals.prot, obj: goalsEsperado.prot_g },
-    { key:'carb', label:'Carbohidratos', val: totals.carb, obj: goalsEsperado.carb_g },
-    { key:'grasa', label:'Grasas', val: totals.grasa, obj: goalsEsperado.grasa_g },
-    { key:'fibra', label:'Fibra', val: totals.fibra, obj: goalsEsperado.fibra_g }
-  ].map(m => ({ ...m, ev: evaluateMetric(m.val, m.obj) })).filter(m => m.ev);
+    { key:'kcal', label:'Kcal', val: totals.kcal, obj: goalsEsperado.kcal, tol: kcalTolerancia },
+    { key:'prot', label:'Proteína', val: totals.prot, obj: goalsEsperado.prot_g, tol: 0 },
+    { key:'carb', label:'Carbohidratos', val: totals.carb, obj: goalsEsperado.carb_g, tol: 0 },
+    { key:'grasa', label:'Grasas', val: totals.grasa, obj: goalsEsperado.grasa_g, tol: 0 },
+    { key:'fibra', label:'Fibra', val: totals.fibra, obj: goalsEsperado.fibra_g, tol: 0 }
+  ].map(m => ({ ...m, ev: evaluateMetric(m.val, m.obj, m.tol) })).filter(m => m.ev);
 
   if (!metrics.length) return '';
 
+  const OK_STATES = ['bien', 'ligeramente bajo', 'ligeramente alto'];
   const bienCount = metrics.filter(m => m.ev.estado === 'bien').length;
+  const aceptableCount = metrics.filter(m => OK_STATES.includes(m.ev.estado)).length;
   let overall, overallColor;
   const sujeto = { 'día':'hoy', 'semana':'esta semana', 'mes':'este mes' }[periodo] || '';
-  if (bienCount >= metrics.length - 1){ overall = `Vas muy bien ${sujeto} 🎉`; overallColor = 'var(--sem-green)'; }
-  else if (bienCount >= Math.ceil(metrics.length/2)){ overall = `Razonablemente bien ${sujeto}, con algún ajuste pendiente.`; overallColor = 'var(--sem-orange)'; }
-  else { overall = `Bastante alejado del objetivo ${sujeto} — nada grave, pero conviene ajustar.`; overallColor = 'var(--sem-red)'; }
+  if (aceptableCount >= metrics.length - 1){ overall = `Vas muy bien ${sujeto} 🎉`; overallColor = 'var(--sem-green)'; }
+  else if (aceptableCount >= Math.ceil(metrics.length/2)){ overall = `Razonablemente bien ${sujeto}, con algún ajuste pendiente.`; overallColor = 'var(--sem-yellow)'; }
+  else if (bienCount + aceptableCount >= 1){ overall = `Bastante alejado del objetivo ${sujeto} — nada grave, pero conviene ajustar.`; overallColor = 'var(--sem-orange)'; }
+  else { overall = `Muy alejado del objetivo ${sujeto} hoy — sin agobiarte, pero conviene corregir.`; overallColor = 'var(--sem-red)'; }
 
   const sugerencias = [];
   metrics.forEach(m => {
-    if (m.ev.estado === 'bien') return;
+    if (OK_STATES.includes(m.ev.estado)) return;
     const dif = Math.round(Math.abs(m.val - m.obj));
     if (!dif) return;
     if (m.key === 'kcal'){
