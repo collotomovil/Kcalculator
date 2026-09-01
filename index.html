@@ -657,7 +657,8 @@
     <div id="datosResultado" style="margin-top:16px;"></div>
   </div>
 
-  <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;">
+  <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
+    Versión 0.6<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -2028,10 +2029,17 @@ async function refreshDiario(){
   const goals = computeGoals(profile);
   if (diarioView === 'dia'){
     const exercises = await loadExerciseForDay(dateKey(diarioRefDate));
-    renderDiaView(meals, goals, exercises);
+    const stepsToday = await storageGet(`steps:${dateKey(diarioRefDate)}`);
+    renderDiaView(meals, goals, exercises, stepsToday);
   }
-  else if (diarioView === 'semana') renderSemanaView(meals, await loadAllExercise(), goals);
-  else renderMesView(meals, await loadAllExercise(), goals);
+  else if (diarioView === 'semana') renderSemanaView(meals, await loadAllExerciseConPasos(), goals);
+  else renderMesView(meals, await loadAllExerciseConPasos(), goals);
+}
+async function loadAllExerciseConPasos(){
+  const exercises = await loadAllExercise();
+  const allSteps = await storageListEntries('steps:');
+  const stepsAsExercise = allSteps.map(s => ({ timestamp: s.timestamp, kcal_quemadas: s.kcal_quemadas || 0 }));
+  return [...exercises, ...stepsAsExercise];
 }
 
 /* ============================================================
@@ -2058,29 +2066,11 @@ async function loadExerciseForDay(dayKeyStr){
 async function openExerciseModal(){
   const profile = await getProfile();
   const peso = profile && profile.peso ? Number(profile.peso) : null;
-  let mode = 'actividad';
   let selectedAct = null, selectedNivel = 'moderado', manualMode = !peso;
-  const todayKey = dateKey(diarioRefDate);
 
   function render(){
     openModal(`
       <div class="modal-head"><h3>Añadir ejercicio</h3><button class="modal-close" id="exClose">✕</button></div>
-      <div class="pill-group" id="exModePills">
-        <button type="button" class="pill ${mode==='actividad'?'active':''}" data-val="actividad">🏃 Actividad</button>
-        <button type="button" class="pill ${mode==='pasos'?'active':''}" data-val="pasos">🚶 Pasos diarios</button>
-      </div>
-      <div id="exModeContent"></div>
-    `);
-    document.getElementById('exClose').addEventListener('click', closeModal);
-    document.querySelectorAll('#exModePills .pill').forEach(p => {
-      p.addEventListener('click', () => { mode = p.dataset.val; render(); });
-    });
-    if (mode === 'actividad') renderActividad(); else renderPasos();
-  }
-
-  function renderActividad(){
-    const wrap = document.getElementById('exModeContent');
-    wrap.innerHTML = `
       <div class="pill-group" id="exActPills">
         ${MET_ACTIVITIES.map(a => `<button type="button" class="pill ${selectedAct===a.val?'active':''}" data-val="${a.val}">${a.label}</button>`).join('')}
       </div>
@@ -2094,7 +2084,9 @@ async function openExerciseModal(){
       <div class="field" id="exKcalManualWrap" ${manualMode ? '' : 'hidden'}><label>Kcal quemadas</label><input type="number" id="exKcalManual" inputmode="numeric"></div>
       <p class="notes" id="exPreview">${peso ? 'Elige una actividad para ver la estimación.' : 'Sin tu peso guardado en "Mis datos" no puedo calcularlo solo — escribe tú las kcal quemadas.'}</p>
       <button class="primary" id="exAddBtn">Añadir</button>
-    `;
+    `);
+    document.getElementById('exClose').addEventListener('click', closeModal);
+
     function updatePreview(){
       if (manualMode || !selectedAct || selectedAct === 'otro' || !peso) return;
       const act = MET_ACTIVITIES.find(a => a.val === selectedAct);
@@ -2102,22 +2094,22 @@ async function openExerciseModal(){
       const minutos = parseFloat(document.getElementById('exMinutos').value) || 0;
       document.getElementById('exPreview').textContent = `Estimado: ${Math.round(met * peso * (minutos/60))} kcal.`;
     }
-    wrap.querySelectorAll('#exActPills .pill').forEach(p => {
+    document.querySelectorAll('#exActPills .pill').forEach(p => {
       p.addEventListener('click', () => {
         selectedAct = p.dataset.val;
         manualMode = (selectedAct === 'otro') || !peso;
         render();
       });
     });
-    wrap.querySelectorAll('#exNivelPills .pill').forEach(p => {
+    document.querySelectorAll('#exNivelPills .pill').forEach(p => {
       p.addEventListener('click', () => {
-        wrap.querySelectorAll('#exNivelPills .pill').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('#exNivelPills .pill').forEach(x => x.classList.remove('active'));
         p.classList.add('active');
         selectedNivel = p.dataset.val;
         updatePreview();
       });
     });
-    wrap.querySelector('#exMinutos').addEventListener('input', updatePreview);
+    document.getElementById('exMinutos').addEventListener('input', updatePreview);
     updatePreview();
 
     document.getElementById('exAddBtn').addEventListener('click', async () => {
@@ -2129,33 +2121,6 @@ async function openExerciseModal(){
         : Math.round(act.met[selectedNivel] * peso * (minutos/60));
       const ts = Date.now();
       await storageSet(`exercise:${ts}`, { timestamp: ts, actividad: act.label + (manualMode ? '' : ' · ' + NIVEL_LABELS[selectedNivel]), minutos, kcal_quemadas: kcalQuemadas });
-      closeModal();
-      refreshDiario();
-    });
-  }
-
-  function renderPasos(){
-    const wrap = document.getElementById('exModeContent');
-    wrap.innerHTML = `
-      <div class="field"><label>Pasos de hoy (según tu reloj o móvil)</label><input type="number" id="exPasos" value="" inputmode="numeric" placeholder="Ej. 8500"></div>
-      <p class="notes" id="exPasosPreview">${peso ? 'Escribe los pasos para ver la estimación.' : 'Sin tu peso guardado en "Mis datos" no puedo calcularlo — añade tu peso primero.'}</p>
-      <button class="primary" id="exPasosAddBtn" ${peso ? '' : 'disabled'}>Guardar pasos de hoy</button>
-    `;
-    function updatePasosPreview(){
-      if (!peso) return;
-      const pasos = parseFloat(document.getElementById('exPasos').value) || 0;
-      const kcal = Math.round(pasos * peso * KCAL_POR_PASO_POR_KG);
-      document.getElementById('exPasosPreview').textContent = `Estimado: ${kcal} kcal.`;
-    }
-    wrap.querySelector('#exPasos').addEventListener('input', updatePasosPreview);
-    wrap.querySelector('#exPasosAddBtn').addEventListener('click', async () => {
-      const pasos = parseFloat(document.getElementById('exPasos').value) || 0;
-      if (!pasos){ alert('Escribe el número de pasos.'); return; }
-      const kcalQuemadas = Math.round(pasos * peso * KCAL_POR_PASO_POR_KG);
-      const existentes = await loadExerciseForDay(todayKey);
-      const pasosPrevios = existentes.find(e => e.esPasos);
-      const ts = pasosPrevios ? pasosPrevios.timestamp : Date.now();
-      await storageSet(`exercise:${ts}`, { timestamp: ts, actividad: '🚶 Pasos diarios', pasos, kcal_quemadas: kcalQuemadas, esPasos: true });
       closeModal();
       refreshDiario();
     });
@@ -2197,7 +2162,7 @@ function renderGoalRow(label, value, target, unit, bySlot, toleranciaAbs){
   </div>`;
 }
 
-function renderDiaView(meals, goals, exercises){
+function renderDiaView(meals, goals, exercises, stepsToday){
   const key = dateKey(diarioRefDate);
   const dayMeals = meals.filter(m => dateKey(new Date(m.timestamp)) === key);
   const isToday = key === dateKey(new Date());
@@ -2221,7 +2186,7 @@ function renderDiaView(meals, goals, exercises){
   const bySlotGrasa = bySlotFor('total_grasas_g');
   const bySlotFibra = bySlotFor('total_fibra_g');
 
-  const exerciseTotal = (exercises||[]).reduce((s,e) => s + (e.kcal_quemadas||0), 0);
+  const exerciseTotal = (exercises||[]).reduce((s,e) => s + (e.kcal_quemadas||0), 0) + (stepsToday ? (stepsToday.kcal_quemadas||0) : 0);
   const netKcal = Math.max(0, Math.round(totals.kcal - exerciseTotal));
 
   const label = diarioRefDate.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
@@ -2244,13 +2209,24 @@ function renderDiaView(meals, goals, exercises){
       </h4>
       ${(exercises && exercises.length) ? exercises.map(e => `
         <div class="food-row">
-          <div class="food-name">${escapeHtml(e.actividad)}${e.minutos ? ' · '+e.minutos+' min' : ''}${e.pasos ? ' · '+e.pasos.toLocaleString('es-ES')+' pasos' : ''}</div>
+          <div class="food-name">${escapeHtml(e.actividad)}${e.minutos ? ' · '+e.minutos+' min' : ''}</div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="food-kcal">−${Math.round(e.kcal_quemadas)} kcal</span>
             <button class="lr-del" data-key="exercise:${e.timestamp}">✕</button>
           </div>
         </div>`).join('') : `<div class="empty-state">Sin ejercicio registrado hoy</div>`}
       <button class="ghost" id="addExerciseBtn" style="margin-top:10px;">+ Añadir ejercicio</button>
+      <div class="steps-block" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-family:ui-monospace,monospace;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);">🚶 Pasos diarios</span>
+          ${stepsToday ? `<span class="food-kcal">−${Math.round(stepsToday.kcal_quemadas)} kcal</span>` : ''}
+        </div>
+        ${stepsToday ? `<div class="food-row"><div class="food-name">${stepsToday.pasos.toLocaleString('es-ES')} pasos hoy</div></div>` : `<div class="empty-state">Sin pasos registrados hoy</div>`}
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input type="number" id="stepsInput" placeholder="Ej. 8500" inputmode="numeric" value="${stepsToday ? stepsToday.pasos : ''}" style="flex:1;">
+          <button class="small-ghost" id="stepsSaveBtn">Guardar</button>
+        </div>
+      </div>
     </div>`;
 
   diarioContent.innerHTML = `
@@ -2293,6 +2269,17 @@ function renderDiaView(meals, goals, exercises){
   const gotoDatos = diarioContent.querySelector('[data-action="goto-datos"]');
   if (gotoDatos) gotoDatos.addEventListener('click', () => showTab('datos'));
   document.getElementById('addExerciseBtn').addEventListener('click', openExerciseModal);
+  document.getElementById('stepsSaveBtn').addEventListener('click', async () => {
+    const pasos = parseFloat(document.getElementById('stepsInput').value) || 0;
+    if (!pasos){ alert('Escribe el número de pasos.'); return; }
+    if (!goals){ alert('Guarda tu peso en "Mis datos" para poder calcular las kcal de los pasos.'); return; }
+    const profileForSteps = await getProfile();
+    const pesoSteps = profileForSteps && profileForSteps.peso ? Number(profileForSteps.peso) : null;
+    if (!pesoSteps){ alert('Guarda tu peso en "Mis datos" para poder calcular las kcal de los pasos.'); return; }
+    const kcalQuemadas = Math.round(pasos * pesoSteps * KCAL_POR_PASO_POR_KG);
+    await storageSet(`steps:${key}`, { timestamp: Date.now(), pasos, kcal_quemadas: kcalQuemadas });
+    refreshDiario();
+  });
   diarioContent.querySelectorAll('[data-action="fill-slot"]').forEach(el => {
     el.addEventListener('click', () => startRetroactiveEntry(key, el.dataset.slot));
   });
