@@ -562,7 +562,7 @@
         <div class="field" style="margin-top:14px;">
           <label>🔎 Buscar en Open Food Facts</label>
           <div style="display:flex;gap:6px;">
-            <input type="text" id="ingOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;">
+            <input type="text" id="ingOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
             <button class="small-ghost" id="ingOffSearchBtn">Buscar</button>
           </div>
         </div>
@@ -607,6 +607,28 @@
     </div>
     <button class="ghost" id="planAiSuggest" style="margin-bottom:16px;">✨ Sugerir semana con IA</button>
     <div id="planContent"></div>
+
+    <h2 class="tab-title" style="margin-top:26px;">Progreso</h2>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin-top:-8px;line-height:1.5;">
+      Registra tu peso una vez por semana y compáralo con las kcal que has consumido esa semana. La IA puede analizar varias semanas juntas y avisarte de incongruencias (por ejemplo, cumplir el objetivo y no perder peso, o al revés).
+    </p>
+    <div class="card">
+      <div class="date-nav">
+        <button id="progPrevWeek">‹</button>
+        <div class="date-label" id="progWeekLabel">—</div>
+        <button id="progNextWeek">›</button>
+      </div>
+      <div class="field"><label>Tu peso esta semana (kg)</label><input type="number" id="progPesoInput" inputmode="decimal" placeholder="Ej. 78.5"></div>
+      <button class="small-ghost" id="progSaveBtn">Guardar peso de esta semana</button>
+      <div class="total-row" style="margin-top:12px;"><span class="lbl">Kcal consumidas esta semana</span><span class="val" id="progKcalSemana">—</span></div>
+    </div>
+    <div class="card" id="progHistorialCard">
+      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Histórico</h4>
+      <div id="progHistorialList"></div>
+      <button class="ghost" id="progAnalizarBtn" style="margin-top:12px;width:100%;">🔎 Analizar progreso con IA</button>
+      <div id="progAnalisisStatus"></div>
+      <div id="progAnalisisResultado"></div>
+    </div>
   </div>
 
   <!-- ===================== MIS DATOS ===================== -->
@@ -658,7 +680,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 0.6<br>
+    Versión 0.7<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -758,7 +780,7 @@ async function geminiRequest(parts){
   return text;
 }
 async function offSearchByName(query){
-  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=10`;
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20`;
   const res = await fetch(url);
   const data = await res.json();
   return (data.products || []).map(p => ({
@@ -1143,7 +1165,7 @@ function showTab(name, direction){
   if (name === 'diario') refreshDiario();
   if (name === 'platos') refreshPlatos();
   if (name === 'ingredientes') refreshIngredientes();
-  if (name === 'planificador') refreshPlanificador();
+  if (name === 'planificador'){ refreshPlanificador(); refreshProgreso(); }
   if (name === 'datos') refreshDatos();
 }
 
@@ -1481,7 +1503,7 @@ function openEditMealIngredientsModal(mealKey){
         <div class="field">
           <label>Buscar (tuyos primero, luego Open Food Facts)</label>
           <div style="display:flex;gap:6px;">
-            <input type="text" id="emiOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;">
+            <input type="text" id="emiOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
             <button class="small-ghost" id="emiOffSearchBtn">Buscar</button>
           </div>
         </div>
@@ -2222,9 +2244,11 @@ function renderDiaView(meals, goals, exercises, stepsToday){
           ${stepsToday ? `<span class="food-kcal">−${Math.round(stepsToday.kcal_quemadas)} kcal</span>` : ''}
         </div>
         ${stepsToday ? `<div class="food-row"><div class="food-name">${stepsToday.pasos.toLocaleString('es-ES')} pasos hoy</div></div>` : `<div class="empty-state">Sin pasos registrados hoy</div>`}
-        <div style="display:flex;gap:6px;margin-top:8px;">
-          <input type="number" id="stepsInput" placeholder="Ej. 8500" inputmode="numeric" value="${stepsToday ? stepsToday.pasos : ''}" style="flex:1;">
-          <button class="small-ghost" id="stepsSaveBtn">Guardar</button>
+        <div class="field" style="margin-top:8px;margin-bottom:0;">
+          <div style="display:flex;gap:6px;">
+            <input type="number" id="stepsInput" placeholder="Ej. 8500" inputmode="numeric" value="${stepsToday ? stepsToday.pasos : ''}" style="flex:1;min-width:0;">
+            <button class="small-ghost" id="stepsSaveBtn" style="flex-shrink:0;">Guardar</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -2272,7 +2296,6 @@ function renderDiaView(meals, goals, exercises, stepsToday){
   document.getElementById('stepsSaveBtn').addEventListener('click', async () => {
     const pasos = parseFloat(document.getElementById('stepsInput').value) || 0;
     if (!pasos){ alert('Escribe el número de pasos.'); return; }
-    if (!goals){ alert('Guarda tu peso en "Mis datos" para poder calcular las kcal de los pasos.'); return; }
     const profileForSteps = await getProfile();
     const pesoSteps = profileForSteps && profileForSteps.peso ? Number(profileForSteps.peso) : null;
     if (!pesoSteps){ alert('Guarda tu peso en "Mis datos" para poder calcular las kcal de los pasos.'); return; }
@@ -3112,6 +3135,92 @@ function renderPlanGrid(){
       });
     });
   });
+}
+
+let progRefDate = new Date();
+
+async function refreshProgreso(){
+  const monday = mondayOf(progRefDate);
+  const weekKey = dateKey(monday);
+  document.getElementById('progWeekLabel').textContent = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
+
+  const entry = await storageGet(`progress:${weekKey}`);
+  document.getElementById('progPesoInput').value = entry && entry.peso ? entry.peso : '';
+
+  const meals = await loadAllMeals();
+  const days = Array.from({length:7}, (_,i) => addDays(monday,i));
+  const weekKeys = days.map(d => dateKey(d));
+  const kcalSemana = meals.filter(m => weekKeys.includes(dateKey(new Date(m.timestamp)))).reduce((s,m) => s + (m.total_kcal||0), 0);
+  document.getElementById('progKcalSemana').textContent = `${Math.round(kcalSemana)} kcal`;
+
+  await renderProgHistorial();
+}
+
+async function renderProgHistorial(){
+  const listEl = document.getElementById('progHistorialList');
+  const allProgress = await storageListEntries('progress:');
+  allProgress.sort((a,b) => a.key.localeCompare(b.key));
+  if (!allProgress.length){
+    listEl.innerHTML = `<div class="empty-state">Todavía no has registrado ningún peso semanal.</div>`;
+    return;
+  }
+  listEl.innerHTML = allProgress.map(p => {
+    const monday = parseDateKey(p.key.replace('progress:',''));
+    const label = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)}`;
+    return `<div class="stat-row"><span>${label}</span><span>${p.peso} kg · ${Math.round(p.kcalSemana||0)} kcal</span></div>`;
+  }).join('');
+}
+
+document.getElementById('progPrevWeek').addEventListener('click', () => { progRefDate = addDays(progRefDate,-7); refreshProgreso(); });
+document.getElementById('progNextWeek').addEventListener('click', () => { progRefDate = addDays(progRefDate,7); refreshProgreso(); });
+
+document.getElementById('progSaveBtn').addEventListener('click', async () => {
+  const peso = parseFloat(document.getElementById('progPesoInput').value);
+  if (!peso){ alert('Escribe tu peso de esta semana.'); return; }
+  const monday = mondayOf(progRefDate);
+  const weekKey = dateKey(monday);
+  const meals = await loadAllMeals();
+  const days = Array.from({length:7}, (_,i) => addDays(monday,i));
+  const weekKeys = days.map(d => dateKey(d));
+  const kcalSemana = meals.filter(m => weekKeys.includes(dateKey(new Date(m.timestamp)))).reduce((s,m) => s + (m.total_kcal||0), 0);
+  await storageSet(`progress:${weekKey}`, { peso, kcalSemana, timestamp: Date.now() });
+  await refreshProgreso();
+});
+
+document.getElementById('progAnalizarBtn').addEventListener('click', analyzeProgressWithAI);
+
+async function analyzeProgressWithAI(){
+  const btn = document.getElementById('progAnalizarBtn');
+  const statusEl = document.getElementById('progAnalisisStatus');
+  const resultEl = document.getElementById('progAnalisisResultado');
+  const allProgress = await storageListEntries('progress:');
+  allProgress.sort((a,b) => a.key.localeCompare(b.key));
+  if (allProgress.length < 2){
+    resultEl.innerHTML = `<div class="info-msg">Registra al menos 2 semanas de peso para que la IA pueda comparar el progreso.</div>`;
+    return;
+  }
+  const profile = await getProfile();
+  const goals = computeGoals(profile);
+  btn.disabled = true;
+  statusEl.innerHTML = `<div class="loading">Analizando tu progreso…<div class="bar"></div></div>`;
+  resultEl.innerHTML = '';
+  try {
+    const datosTexto = allProgress.map(p => {
+      const monday = parseDateKey(p.key.replace('progress:',''));
+      const label = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)}`;
+      return `- Semana del ${label}: peso ${p.peso} kg, ${Math.round(p.kcalSemana||0)} kcal consumidas`;
+    }).join('\n');
+    const objetivoTexto = goals ? `Su objetivo diario son ${goals.kcal} kcal (~${goals.kcal*7} kcal/semana), con un objetivo general de "${goals.objetivo || 'mantener'}" peso.` : 'No tiene un objetivo de kcal configurado.';
+    const prompt = `Eres un asistente nutricional que ayuda a interpretar datos de progreso de peso y calorías, con un tono cercano y sin tecnicismos. Estos son los datos semanales de un usuario (semana, peso corporal, kcal totales consumidas esa semana):\n${datosTexto}\n\n${objetivoTexto}\n\nAnaliza brevemente la relación entre las kcal consumidas y la evolución del peso a lo largo de las semanas. Señala explícitamente si detectas alguna incongruencia, por ejemplo: cumplir el objetivo de kcal (o estar en déficit) y no perder peso, o comer por encima del objetivo y no ganar peso, u otros patrones raros. Si no hay incongruencias, dilo también. Da una pequeña reflexión final en un máximo de 4-5 frases, tono cercano, sin dar consejo médico, dejando claro que son solo datos orientativos y que el peso corporal fluctúa por muchos motivos (agua, hormonas, etc). Responde en español, sin markdown ni listas, en texto plano corrido.`;
+    const text = await geminiRequest([{ text: prompt }]);
+    resultEl.innerHTML = `<div class="valoracion-box" style="border-left-color:var(--mango-dark);"><p style="margin:0;line-height:1.6;">${escapeHtml(text)}</p></div>`;
+    statusEl.innerHTML = '';
+  } catch (err){
+    console.error(err);
+    statusEl.innerHTML = `<div class="error">${escapeHtml(err.message || 'No se pudo generar el análisis.')}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function openSlotPicker(dayIdx, slotKey){
