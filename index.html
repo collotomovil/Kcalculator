@@ -337,6 +337,9 @@
     font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink);cursor:pointer;
     box-shadow:var(--shadow-btn);padding:6px 4px;text-align:center;line-height:1.2;
   }
+  .mode-grid-flat button{
+    aspect-ratio:auto;padding:13px 4px;font-size:14px;
+  }
   .mode-grid button .mg-icon{font-size:28px;line-height:1;}
   .mode-grid button.active{background:var(--mango);color:#fff;}
   html[data-style="nube"] .mode-grid button{border:none;}
@@ -391,6 +394,7 @@
   .picker-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:14.5px;}
   .picker-row:last-child{border-bottom:none;}
   .disclaimer{margin-top:24px;font-size:12px;line-height:1.5;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:12px;}
+  .scroll-box{max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   /* --- cuadricula de ingredientes propios en Calculadora --- */
   .own-ing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
   .own-ing-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--paper);border:var(--border-w) solid var(--ink);border-radius:var(--radius-md);padding:8px 4px;cursor:pointer;text-align:center;}
@@ -492,7 +496,7 @@
 
     <div class="card" id="repeatCard" hidden>
       <div class="field"><label>Buscar en tus platos guardados</label><input type="text" id="repeatSearchInput" placeholder="Ej. arroz con pollo…"></div>
-      <div id="repeatList"></div>
+      <div id="repeatList" class="scroll-box"></div>
     </div>
 
     <div class="card" id="textCard" hidden>
@@ -520,10 +524,10 @@
   <!-- ===================== MI DIARIO ===================== -->
   <div id="tab-diario" class="tab-panel" hidden>
     <h2 class="tab-title">Mi diario</h2>
-    <div class="pill-group" id="diarioViewToggle">
-      <button class="pill active" data-view="dia">Día</button>
-      <button class="pill" data-view="semana">Semana</button>
-      <button class="pill" data-view="mes">Mes</button>
+    <div class="mode-grid mode-grid-flat" id="diarioViewToggle">
+      <button class="active" data-view="dia">Día</button>
+      <button data-view="semana">Semana</button>
+      <button data-view="mes">Mes</button>
     </div>
     <div id="diarioContent"></div>
   </div>
@@ -590,24 +594,9 @@
     </div>
     <button class="ghost" id="planAiSuggest" style="margin-bottom:16px;">✨ Sugerir semana con IA</button>
     <div id="planContent"></div>
-
-    <h2 class="tab-title" style="margin-top:26px;">Progreso</h2>
-    <p style="font-size:13.5px;color:var(--ink-soft);margin-top:-8px;line-height:1.5;">Registra tu peso una vez por semana y compáralo con las kcal que has consumido esa semana. La IA puede analizar varias semanas juntas y avisarte de incongruencias.</p>
-    <div class="card"><h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Kcal semanales y peso</h4><div id="progChartWrap"></div></div>
-    <div class="card">
-      <div class="date-nav"><button id="progPrevWeek">‹</button><div class="date-label" id="progWeekLabel">—</div><button id="progNextWeek">›</button></div>
-      <div class="field"><label>Tu peso esta semana (kg)</label><input type="number" id="progPesoInput" inputmode="decimal" placeholder="Ej. 78.5"></div>
-      <button class="small-ghost" id="progSaveBtn">Guardar peso de esta semana</button>
-      <div class="total-row" style="margin-top:12px;"><span class="lbl">Kcal consumidas esta semana</span><span class="val" id="progKcalSemana">—</span></div>
-    </div>
-    <div class="card" id="progHistorialCard">
-      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Histórico</h4>
-      <div id="progHistorialList"></div>
-      <button class="ghost" id="progAnalizarBtn" style="margin-top:12px;width:100%;">🔎 Analizar progreso con IA</button>
-      <div id="progAnalisisStatus"></div>
-      <div id="progAnalisisResultado"></div>
-    </div>
   </div>
+
+  
 
   <!-- ===================== MIS DATOS ===================== -->
   <div id="tab-datos" class="tab-panel" hidden>
@@ -658,7 +647,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.0<br>
+    Versión 1.1<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1143,7 +1132,7 @@ function showTab(name, direction){
   if (name === 'diario') refreshDiario();
   if (name === 'platos') refreshPlatos();
   if (name === 'ingredientes') refreshIngredientes();
-  if (name === 'planificador'){ refreshPlanificador(); refreshProgreso(); }
+  if (name === 'planificador') refreshPlanificador();
   if (name === 'datos') refreshDatos();
 }
 
@@ -2136,9 +2125,9 @@ let diarioRefDate = new Date();
 const diarioContent = document.getElementById('diarioContent');
 
 document.getElementById('diarioViewToggle').addEventListener('click', (e) => {
-  const btn = e.target.closest('.pill');
+  const btn = e.target.closest('button');
   if (!btn) return;
-  document.querySelectorAll('#diarioViewToggle .pill').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#diarioViewToggle button').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   diarioView = btn.dataset.view;
   diarioRefDate = new Date();
@@ -2158,7 +2147,7 @@ async function refreshDiario(){
     const stepsToday = await storageGet(`steps:${dateKey(diarioRefDate)}`);
     renderDiaView(meals, goals, exercises, stepsToday);
   }
-  else if (diarioView === 'semana') renderSemanaView(meals, await loadAllExerciseConPasos(), goals);
+  else if (diarioView === 'semana') await renderSemanaView(meals, await loadAllExerciseConPasos(), goals);
   else renderMesView(meals, await loadAllExerciseConPasos(), goals);
 }
 async function loadAllExerciseConPasos(){
@@ -2577,8 +2566,9 @@ function renderValoracion(totals, goalsEsperado, periodo, enCurso, objetivoUsuar
     </div>`;
 }
 
-function renderSemanaView(meals, exercises, goals){
+async function renderSemanaView(meals, exercises, goals){
   const monday = mondayOf(diarioRefDate);
+  const weekKey = dateKey(monday);
   const days = Array.from({length:7}, (_,i) => addDays(monday,i));
   const dayData = days.map(d => {
     const key = dateKey(d);
@@ -2599,6 +2589,7 @@ function renderSemanaView(meals, exercises, goals){
   const weekGrasa = dayData.reduce((a,d) => a+d.grasa, 0);
   const weekFibra = dayData.reduce((a,d) => a+d.fibra, 0);
   const rangeLabel = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
+  const progressEntry = await storageGet(`progress:${weekKey}`);
 
   diarioContent.innerHTML = `
     <div class="date-nav">
@@ -2643,9 +2634,28 @@ function renderSemanaView(meals, exercises, goals){
         goalsEsperado, 'semana', enCurso, goals.objetivo
       );
     })()}
+    <div class="card">
+      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Progreso semanal</h4>
+      <div class="field"><label>Tu peso esta semana (kg)</label><input type="number" id="progPesoInput" inputmode="decimal" placeholder="Ej. 78.5" value="${progressEntry && progressEntry.peso ? progressEntry.peso : ''}"></div>
+      <button class="small-ghost" id="progSaveBtn">Guardar peso de esta semana</button>
+      <div id="progChartWrap" style="margin-top:14px;"></div>
+      <div id="progAnalisisStatus"></div>
+      <div id="progAnalisisResultado"></div>
+      <button class="ghost" id="progAnalizarBtn" style="margin-top:10px;width:100%;">🔎 Analizar progreso con IA</button>
+    </div>
   `;
   document.getElementById('wPrev').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,-7); refreshDiario(); });
   document.getElementById('wNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,7); refreshDiario(); });
+
+  document.getElementById('progSaveBtn').addEventListener('click', async () => {
+    const peso = parseFloat(document.getElementById('progPesoInput').value);
+    if (!peso){ alert('Escribe tu peso de esta semana.'); return; }
+    await storageSet(`progress:${weekKey}`, { peso, kcalSemana: weekTotal, timestamp: Date.now() });
+    renderProgChart(goals);
+  });
+  document.getElementById('progAnalizarBtn').addEventListener('click', () => analyzeProgressWithAI(goals));
+
+  await renderProgChart(goals);
 }
 
 function renderMesView(meals, exercises, goals){
@@ -3241,43 +3251,11 @@ function renderPlanGrid(){
   });
 }
 
-let progRefDate = new Date();
 let progExpandedWeekKey = null;
 
-async function refreshProgreso(){
-  const monday = mondayOf(progRefDate);
-  const weekKey = dateKey(monday);
-  document.getElementById('progWeekLabel').textContent = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
-  const entry = await storageGet(`progress:${weekKey}`);
-  document.getElementById('progPesoInput').value = entry && entry.peso ? entry.peso : '';
-  const meals = await loadAllMeals();
-  const days = Array.from({length:7}, (_,i) => addDays(monday,i));
-  const weekKeys = days.map(d => dateKey(d));
-  const kcalSemana = meals.filter(m => weekKeys.includes(dateKey(new Date(m.timestamp)))).reduce((s,m) => s + (m.total_kcal||0), 0);
-  document.getElementById('progKcalSemana').textContent = `${Math.round(kcalSemana)} kcal`;
-  await renderProgHistorial();
-  await renderProgChart();
-}
-
-async function renderProgHistorial(){
-  const listEl = document.getElementById('progHistorialList');
-  const allProgress = await storageListEntries('progress:');
-  allProgress.sort((a,b) => a.key.localeCompare(b.key));
-  if (!allProgress.length){
-    listEl.innerHTML = `<div class="empty-state">Todavía no has registrado ningún peso semanal.</div>`;
-    return;
-  }
-  listEl.innerHTML = allProgress.map(p => {
-    const monday = parseDateKey(p.key.replace('progress:',''));
-    const label = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)}`;
-    return `<div class="stat-row"><span>${label}</span><span>${p.peso} kg · ${Math.round(p.kcalSemana||0)} kcal</span></div>`;
-  }).join('');
-}
-
-async function renderProgChart(){
+async function renderProgChart(goals){
   const wrap = document.getElementById('progChartWrap');
-  const profile = await getProfile();
-  const goals = computeGoals(profile);
+  if (!wrap) return;
   const objetivoSemanal = goals ? goals.kcal * 7 : null;
   const objetivoDiario = goals ? goals.kcal : null;
   const allProgress = await storageListEntries('progress:');
@@ -3367,25 +3345,7 @@ function renderProgWeekDays(weekKey, meals, objetivoDiario){
   </div>`;
 }
 
-document.getElementById('progPrevWeek').addEventListener('click', () => { progRefDate = addDays(progRefDate,-7); refreshProgreso(); });
-document.getElementById('progNextWeek').addEventListener('click', () => { progRefDate = addDays(progRefDate,7); refreshProgreso(); });
-
-document.getElementById('progSaveBtn').addEventListener('click', async () => {
-  const peso = parseFloat(document.getElementById('progPesoInput').value);
-  if (!peso){ alert('Escribe tu peso de esta semana.'); return; }
-  const monday = mondayOf(progRefDate);
-  const weekKey = dateKey(monday);
-  const meals = await loadAllMeals();
-  const days = Array.from({length:7}, (_,i) => addDays(monday,i));
-  const weekKeys = days.map(d => dateKey(d));
-  const kcalSemana = meals.filter(m => weekKeys.includes(dateKey(new Date(m.timestamp)))).reduce((s,m) => s + (m.total_kcal||0), 0);
-  await storageSet(`progress:${weekKey}`, { peso, kcalSemana, timestamp: Date.now() });
-  await refreshProgreso();
-});
-
-document.getElementById('progAnalizarBtn').addEventListener('click', analyzeProgressWithAI);
-
-async function analyzeProgressWithAI(){
+async function analyzeProgressWithAI(goals){
   const btn = document.getElementById('progAnalizarBtn');
   const statusEl = document.getElementById('progAnalisisStatus');
   const resultEl = document.getElementById('progAnalisisResultado');
@@ -3395,8 +3355,6 @@ async function analyzeProgressWithAI(){
     resultEl.innerHTML = `<div class="info-msg">Registra al menos 2 semanas de peso para que la IA pueda comparar el progreso.</div>`;
     return;
   }
-  const profile = await getProfile();
-  const goals = computeGoals(profile);
   btn.disabled = true;
   statusEl.innerHTML = `<div class="loading">Analizando tu progreso…<div class="bar"></div></div>`;
   resultEl.innerHTML = '';
