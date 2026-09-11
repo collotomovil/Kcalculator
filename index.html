@@ -396,6 +396,24 @@
   .picker-row:last-child{border-bottom:none;}
   .disclaimer{margin-top:24px;font-size:12px;line-height:1.5;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:12px;}
   .scroll-box{max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #previewWrap{position:relative;}
+  .save-success-overlay{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0);color:#fff;display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-display);font-size:16px;font-weight:700;text-align:center;padding:20px;
+    border-radius:var(--radius-md);pointer-events:none;opacity:0;transition:background .5s ease, opacity .5s ease;
+  }
+  .save-success-overlay.show{background:rgba(0,0,0,.82);opacity:1;}
+  .wizard-step{animation:none;}
+  .wizard-step.wizard-in-next{animation:tabSlideInRight .28s ease-out;}
+  .wizard-step.wizard-in-prev{animation:tabSlideInLeft .28s ease-out;}
+  @media (prefers-reduced-motion: reduce){
+    .wizard-step.wizard-in-next, .wizard-step.wizard-in-prev{ animation:none; }
+  }
+  .wizard-steps-nav{display:flex;gap:8px;margin-top:14px;}
+  .wizard-steps-nav button{flex:1;}
+  .ingredient-detail-row{cursor:pointer;}
+  .ingredient-detail-row:active{opacity:.7;}
   /* --- cuadricula de ingredientes propios en Calculadora --- */
   .own-ing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
   .own-ing-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--paper);border:var(--border-w) solid var(--ink);border-radius:var(--radius-md);padding:8px 4px;cursor:pointer;text-align:center;}
@@ -440,7 +458,7 @@
     </button>
     <button data-tab="ingredientes">
       <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a3 3 0 0 0 6 0V3M9 10v11M18 3c-2 2-2 5-2 7s2 4 2 4v7"/></svg>
-      Ingredientes
+      Productos
     </button>
     <button data-tab="planificador">
       <svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 3v3M16 3v3"/></svg>
@@ -477,16 +495,9 @@
 
       <div id="previewWrap" hidden>
         <img id="preview" alt="Vista previa del plato">
-        <div class="field" style="margin-top:12px;">
-          <label>¿Qué es esta foto?</label>
-          <div class="pill-group" id="fotoTipoPills">
-            <button type="button" class="pill active" data-tipo="plato">🍽️ Plato elaborado</button>
-            <button type="button" class="pill" data-tipo="producto_barcode">🏷️ Producto (código de barras)</button>
-            <button type="button" class="pill" data-tipo="producto_buscar">🔎 Producto (buscar nombre)</button>
-          </div>
-        </div>
         <button class="primary" id="analyzeBtn">Analizar plato</button>
         <button class="ghost" id="retakeBtn">Elegir otra foto</button>
+        <div id="saveSuccessOverlay" class="save-success-overlay" hidden><span>✓ Guardado correctamente</span></div>
       </div>
 
       <div class="loading" id="loadingWrap" hidden>
@@ -516,9 +527,9 @@
     <div class="card" id="resultCard" hidden></div>
 
     <div class="disclaimer">
-      <b>Sacar foto:</b> estimación por IA (tu clave gratuita de Gemini, en Ajustes ⚙). Puedes editar cada ingrediente antes de guardar si algo no cuadra.<br>
+      <b>Sacar foto:</b> la IA detecta los ingredientes o el producto (código de barras / Open Food Facts) automáticamente. Podrás revisar y corregir pesos y datos antes de guardar.<br>
       <b>Plato guardado:</b> reutiliza uno ya guardado, por si hoy has comido lo mismo.<br>
-      <b>Crearlo yo mismo:</b> descríbelo con IA, añade ingredientes uno a uno, o combina ambos.
+      <b>Describir plato:</b> descríbelo con texto y la IA estima los ingredientes.
     </div>
   </div>
 
@@ -544,7 +555,7 @@
 
   <!-- ===================== MIS INGREDIENTES ===================== -->
   <div id="tab-ingredientes" class="tab-panel" hidden>
-    <h2 class="tab-title">Mis ingredientes</h2>
+    <h2 class="tab-title">Mis productos</h2>
     <p style="font-size:13.5px;color:var(--ink-soft);margin-top:-8px;line-height:1.5;">
       Se usan como referencia en la Calculadora: si la IA (foto o descripción) reconoce que algo coincide con uno de estos, usa su dato exacto en vez de estimar a ojo. Aun así, no puede adivinar variantes visualmente idénticas (ej. mayonesa normal vs. ligera) — en esos casos, edita esa línea después de analizar, menciónalo por su nombre en "Descripción", o búscalo aquí mismo al construir el plato (tus ingredientes salen primero en esa búsqueda).
     </p>
@@ -658,7 +669,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.2<br>
+    Versión 1.3<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1251,123 +1262,337 @@ function resetCaptureUI(){
   resultCard.hidden = true;
 }
 
-let fotoTipoSeleccionado = 'plato';
-document.querySelectorAll('#fotoTipoPills .pill').forEach(p => {
-  p.addEventListener('click', () => {
-    document.querySelectorAll('#fotoTipoPills .pill').forEach(x => x.classList.remove('active'));
-    p.classList.add('active');
-    fotoTipoSeleccionado = p.dataset.tipo;
-    analyzeBtn.textContent = fotoTipoSeleccionado === 'plato' ? 'Analizar plato' : 'Buscar producto';
-  });
-});
+let wizardMealName = '';
+let wizardSlot = null;
+let wizardDestino = 'plato';
+analyzeBtn.addEventListener('click', analyzeEverything);
 
-analyzeBtn.addEventListener('click', () => {
-  if (fotoTipoSeleccionado === 'plato') return analyzePlate();
-  if (fotoTipoSeleccionado === 'producto_barcode') return analyzeProductBarcodeFromPhoto();
-  if (fotoTipoSeleccionado === 'producto_buscar') return openProductSearchFromPhoto();
-});
+function applyAnalysisResult(parsed, source){
+  manualItems = (parsed.alimentos || []).map(a => ({
+    nombre: a.nombre || 'Alimento',
+    gramos: Number(a.cantidad_g) || 100,
+    kcal_100g: Number(a.kcal_100g) || 0,
+    proteinas_100g: Number(a.proteinas_100g) || 0,
+    carbohidratos_100g: Number(a.carbohidratos_100g) || 0,
+    grasas_100g: Number(a.grasas_100g) || 0,
+    fibra_100g: Number(a.fibra_100g) || 0
+  }));
+  analysisMeta = {
+    vitaminas_destacadas: parsed.vitaminas_destacadas || [],
+    confianza: parsed.confianza || null,
+    notas: parsed.notas || ''
+  };
+  lastAnalysisSource = source || null;
+  lastAnalysisGramosOriginal = manualItems.reduce((s,i) => s + i.gramos, 0);
+  if (source === 'foto' || source === 'texto'){
+    openWizardStep1();
+  } else {
+    renderManualItemsList();
+  }
+}
 
-async function analyzeProductBarcodeFromPhoto(){
+async function analyzeEverything(){
+  if (!currentBase64) return;
   errorWrapCalc.innerHTML = '';
+  resultCard.hidden = true;
   loadingWrap.hidden = false;
   analyzeBtn.disabled = true;
+
   try {
     const code = await decodeBarcodeFromImage(preview.src);
-    if (!code){
-      errorWrapCalc.innerHTML = `<div class="error">No se pudo leer el código de barras en la foto. Prueba con "Producto (buscar nombre)" o acércate más al código.</div>`;
-      return;
+    if (code){
+      const product = await offGetByBarcode(code);
+      if (product && product.nombre){
+        manualItems = [{
+          nombre: product.nombre,
+          gramos: 100,
+          kcal_100g: product.kcal_100g || 0,
+          proteinas_100g: product.proteinas_100g || 0,
+          carbohidratos_100g: product.carbohidratos_100g || 0,
+          grasas_100g: product.grasas_100g || 0,
+          fibra_100g: product.fibra_100g || 0,
+          foto: product.foto || ''
+        }];
+        analysisMeta = { vitaminas_destacadas: [], confianza: 'alta', notas: 'Producto identificado por código de barras en Open Food Facts.' };
+        lastAnalysisSource = 'producto';
+        lastAnalysisGramosOriginal = 100;
+        loadingWrap.hidden = true;
+        analyzeBtn.disabled = false;
+        openWizardStep1();
+        return;
+      }
     }
-    const product = await offGetByBarcode(code);
-    if (!product || !product.nombre){
-      errorWrapCalc.innerHTML = `<div class="error">Código ${escapeHtml(code)} leído pero no está en Open Food Facts. Prueba a buscarlo por nombre.</div>`;
-      return;
-    }
-    openGramsModalForNewMeal(product);
   } catch (err){
+    console.error('barcode', err);
+  }
+
+  const ingredientsContext = await buildIngredientsContext();
+  const { parts: calibParts, hint: factorHint } = await buildCalibrationParts();
+  const prompt = buildAnalysisPrompt(`\n\nApóyate en referencias de tamaño habituales (plato estándar ~26cm, cubiertos, vasos) para estimar las cantidades a partir de la foto.${ingredientsContext}${factorHint}`);
+
+  try {
+    const text = await geminiRequest([
+      ...calibParts,
+      { text: prompt },
+      { inline_data: { mime_type: currentMediaType, data: currentBase64 } }
+    ]);
+    applyAnalysisResult(parseJsonLoose(text), 'foto');
+  } catch (err) {
     console.error(err);
-    errorWrapCalc.innerHTML = `<div class="error">${escapeHtml(err.message || 'No se pudo leer el código de barras.')}</div>`;
+    errorWrapCalc.innerHTML = `<div class="error">No se pudo analizar la foto. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
   } finally {
     loadingWrap.hidden = true;
     analyzeBtn.disabled = false;
   }
 }
 
-function openProductSearchFromPhoto(){
+function animateWizardStep(direction){
+  if (!direction) return;
+  const box = document.getElementById('modalBox');
+  if (!box) return;
+  box.classList.remove('wizard-in-next', 'wizard-in-prev');
+  void box.offsetWidth;
+  box.classList.add(direction === 'next' ? 'wizard-in-next' : 'wizard-in-prev');
+}
+
+function openWizardStep1(){
+  const fotoPreview = (currentBase64 && preview && preview.src) ? preview.src : '';
   openModal(`
-    <div class="modal-head"><h3>Buscar producto</h3><button class="modal-close" id="psClose">✕</button></div>
+    <div class="modal-head"><h3>Revisa los pesos</h3><button class="modal-close" id="wrClose">✕</button></div>
+    ${fotoPreview ? `<img src="${fotoPreview}" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--radius-md);border:var(--border-w) solid var(--ink);margin-bottom:12px;" alt="">` : ''}
+    <p class="notes" style="margin:0 0 10px;">Ajusta el peso de cada ingrediente si no coincide con lo que ves.</p>
+    <div id="wrList">
+      ${manualItems.map((i, idx) => `
+        <div class="field-row" style="align-items:flex-end;">
+          <div class="field" style="flex:2;"><label>${escapeHtml(i.nombre)}</label></div>
+          <div class="field" style="flex:1;"><label>Gramos</label><input type="number" data-idx="${idx}" class="wr-gramos-input" value="${i.gramos}" inputmode="decimal"></div>
+        </div>`).join('')}
+    </div>
+    <button class="primary" id="wrNextBtn" style="margin-top:10px;">Siguiente</button>
+  `);
+  document.getElementById('wrClose').addEventListener('click', closeModal);
+  document.querySelectorAll('.wr-gramos-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = parseInt(inp.dataset.idx);
+      manualItems[idx].gramos = parseFloat(inp.value) || 0;
+    });
+  });
+  document.getElementById('wrNextBtn').addEventListener('click', () => {
+    openWizardStep2('next');
+  });
+}
+
+function openWizardStep2(direction){
+  const totalKcal = manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0);
+  openModal(`
+    <div class="modal-head"><h3>Desglose por ingrediente</h3><button class="modal-close" id="w2Close">✕</button></div>
+    <p class="notes" style="margin:0 0 10px;">Toca un ingrediente para ver o corregir su información nutricional detallada.</p>
+    <div id="w2List">
+      ${manualItems.map((i, idx) => `
+        <div class="food-row ingredient-detail-row" data-idx="${idx}">
+          <div>
+            <div class="food-name">${escapeHtml(i.nombre)} <span style="opacity:.5;">ℹ️</span></div>
+            <div class="food-meta">${i.gramos} g</div>
+          </div>
+          <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
+        </div>`).join('')}
+    </div>
+    <div class="total-row" style="margin-top:8px;"><span class="lbl">Total</span><span class="val">${Math.round(totalKcal)} kcal</span></div>
+    <div class="wizard-steps-nav">
+      <button class="ghost" id="w2BackBtn">Atrás</button>
+      <button class="primary" id="w2NextBtn">Siguiente</button>
+    </div>
+  `);
+  animateWizardStep(direction);
+  document.getElementById('w2Close').addEventListener('click', closeModal);
+  document.querySelectorAll('.ingredient-detail-row').forEach(row => {
+    row.addEventListener('click', () => openIngredientDetailModal(parseInt(row.dataset.idx)));
+  });
+  document.getElementById('w2BackBtn').addEventListener('click', () => { openWizardStep1(); animateWizardStep('prev'); });
+  document.getElementById('w2NextBtn').addEventListener('click', () => openWizardStep3('next'));
+}
+
+function openIngredientDetailModal(idx){
+  const item = manualItems[idx];
+  openModal(`
+    <div class="modal-head"><h3>${escapeHtml(item.nombre)}</h3><button class="modal-close" id="idClose">✕</button></div>
+    <div class="field"><label>Nombre</label><input type="text" id="idNombre" value="${escapeHtml(item.nombre)}"></div>
+    <div class="field"><label>Cantidad (g)</label><input type="number" id="idGramos" value="${item.gramos}" inputmode="decimal"></div>
+    <div class="field"><label>Kcal / 100g</label><input type="number" id="idKcal100" value="${item.kcal_100g}" inputmode="decimal"></div>
+    <div class="field-row">
+      <div class="field"><label>Proteína g/100g</label><input type="number" id="idProt" value="${item.proteinas_100g||0}" inputmode="decimal"></div>
+      <div class="field"><label>Carbohidratos g/100g</label><input type="number" id="idCarb" value="${item.carbohidratos_100g||0}" inputmode="decimal"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Grasas g/100g</label><input type="number" id="idGrasa" value="${item.grasas_100g||0}" inputmode="decimal"></div>
+      <div class="field"><label>Fibra g/100g</label><input type="number" id="idFibra" value="${item.fibra_100g||0}" inputmode="decimal"></div>
+    </div>
+    <button class="primary" id="idSaveBtn">Guardar</button>
+    <button class="ghost" id="idBackBtn" style="margin-top:8px;">Volver</button>
+  `);
+  document.getElementById('idClose').addEventListener('click', () => openWizardStep2(null));
+  document.getElementById('idBackBtn').addEventListener('click', () => openWizardStep2(null));
+  document.getElementById('idSaveBtn').addEventListener('click', () => {
+    manualItems[idx] = {
+      ...item,
+      nombre: document.getElementById('idNombre').value.trim() || item.nombre,
+      gramos: parseFloat(document.getElementById('idGramos').value) || item.gramos,
+      kcal_100g: parseFloat(document.getElementById('idKcal100').value) || item.kcal_100g,
+      proteinas_100g: parseFloat(document.getElementById('idProt').value) || 0,
+      carbohidratos_100g: parseFloat(document.getElementById('idCarb').value) || 0,
+      grasas_100g: parseFloat(document.getElementById('idGrasa').value) || 0,
+      fibra_100g: parseFloat(document.getElementById('idFibra').value) || 0
+    };
+    openWizardStep2(null);
+  });
+}
+
+function openWizardStep3(direction){
+  wizardMealName = wizardMealName || defaultDishName(manualItems.map(i => ({nombre:i.nombre})));
+  const defaultSlot = wizardSlot || pendingEntrySlot || guessSlot();
+  openModal(`
+    <div class="modal-head"><h3>Guardar plato</h3><button class="modal-close" id="w3Close">✕</button></div>
+    <div class="field"><label>Nombre del plato</label><input type="text" id="w3Nombre" value="${escapeHtml(wizardMealName)}"></div>
     <div class="field">
-      <label>Nombre del producto</label>
-      <div style="display:flex;gap:6px;">
-        <input type="text" id="psSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
-        <button class="small-ghost" id="psSearchBtn">Buscar</button>
+      <label>¿Para qué comida es?</label>
+      <div class="pill-group" id="w3SlotPills">
+        ${Object.entries(SLOT_LABELS).map(([key,label]) => `<button type="button" class="pill ${key===defaultSlot?'active':''}" data-slot="${key}">${label}</button>`).join('')}
       </div>
     </div>
-    <div id="psSearchStatus"></div>
-    <div id="psSearchResults"></div>
+    <div class="field">
+      <label>Guardar como</label>
+      <div class="pill-group" id="w3DestinoPills">
+        <button type="button" class="pill ${wizardDestino==='plato'?'active':''}" data-destino="plato">Mis platos</button>
+        <button type="button" class="pill ${wizardDestino==='producto'?'active':''}" data-destino="producto">Mis productos</button>
+      </div>
+    </div>
+    <div class="wizard-steps-nav">
+      <button class="ghost" id="w3BackBtn">Atrás</button>
+      <button class="primary" id="w3FinishBtn">Finalizar</button>
+    </div>
+    <div id="w3Status"></div>
   `);
-  document.getElementById('psClose').addEventListener('click', closeModal);
-  document.getElementById('psSearchBtn').addEventListener('click', doProductSearch);
-  document.getElementById('psSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doProductSearch(); });
+  animateWizardStep(direction);
+  document.getElementById('w3Close').addEventListener('click', closeModal);
+  document.getElementById('w3Nombre').addEventListener('input', (e) => { wizardMealName = e.target.value; });
+  document.querySelectorAll('#w3SlotPills .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('#w3SlotPills .pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      wizardSlot = p.dataset.slot;
+    });
+  });
+  document.querySelectorAll('#w3DestinoPills .pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('#w3DestinoPills .pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      wizardDestino = p.dataset.destino;
+    });
+  });
+  document.getElementById('w3BackBtn').addEventListener('click', () => openWizardStep2('prev'));
+  document.getElementById('w3FinishBtn').addEventListener('click', finishWizardAndSave);
+}
 
-  async function doProductSearch(){
-    const query = document.getElementById('psSearchInput').value.trim();
-    if (!query) return;
-    const statusEl = document.getElementById('psSearchStatus');
-    const resultsEl = document.getElementById('psSearchResults');
-    statusEl.innerHTML = `<div class="loading">Buscando…<div class="bar"></div></div>`;
-    resultsEl.innerHTML = '';
-    try {
-      const results = await offSearchByName(query);
-      statusEl.innerHTML = '';
-      if (!results.length){
-        resultsEl.innerHTML = `<div class="empty-state">Sin resultados para "${escapeHtml(query)}".</div>`;
-        return;
-      }
-      resultsEl.innerHTML = results.map((r,i) => `
-        <div class="list-row" data-idx="${i}" style="cursor:pointer;">
-          <div class="lr-left">
-            <div class="lr-title">${escapeHtml(r.nombre)}${r.marca ? ' · '+escapeHtml(r.marca) : ''}</div>
-            <div class="lr-sub">${r.kcal_100g} kcal/100g</div>
-          </div>
-        </div>`).join('');
-      resultsEl.querySelectorAll('.list-row').forEach(row => {
-        row.addEventListener('click', () => {
-          closeModal();
-          openGramsModalForNewMeal(results[parseInt(row.dataset.idx)]);
-        });
+async function finishWizardAndSave(){
+  const btn = document.getElementById('w3FinishBtn');
+  const statusEl = document.getElementById('w3Status');
+  btn.disabled = true;
+  const nombreFinal = (document.getElementById('w3Nombre').value || '').trim() || wizardMealName || defaultDishName(manualItems.map(i => ({nombre:i.nombre})));
+  const slotFinal = wizardSlot || pendingEntrySlot || guessSlot();
+
+  if (wizardDestino === 'producto'){
+    for (const item of manualItems){
+      const id = Date.now() + Math.floor(Math.random()*1000);
+      await storageSet(`ingredients:${id}`, {
+        id, nombre: item.nombre, marca: '',
+        kcal_100g: item.kcal_100g||0, proteinas_100g: item.proteinas_100g||0,
+        carbohidratos_100g: item.carbohidratos_100g||0, grasas_100g: item.grasas_100g||0,
+        fibra_100g: item.fibra_100g||0, azucares_100g: null, grasas_sat_100g: null, sal_100g: null,
+        foto: item.foto || '', codigo_barras: null, fuente: 'wizard_foto', fecha: id
       });
-    } catch (err){
-      console.error(err);
-      statusEl.innerHTML = `<div class="error">No se pudo buscar. Revisa tu conexión e inténtalo de nuevo.</div>`;
     }
+    closeModal();
+    triggerSaveSuccessOverlay();
+    return;
+  }
+
+  learnFromCorrection();
+  let fotoFinal = '';
+  try{
+    if (currentBase64 && preview.src) fotoFinal = await makeThumbnail(preview.src, 220);
+  }catch(err){ console.error('thumbnail', err); }
+
+  const entry = {
+    timestamp: (() => {
+      if (!pendingEntryDate) return Date.now();
+      const d = parseDateKey(pendingEntryDate);
+      const now = new Date();
+      d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      return d.getTime();
+    })(),
+    slot: slotFinal,
+    nombre: nombreFinal,
+    foto: fotoFinal,
+    alimentos: manualItems.map(i => ({
+      nombre: i.nombre,
+      cantidad_estimada: `${Math.round(i.gramos)} g`,
+      kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
+    })),
+    total_kcal: Math.round(manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0)),
+    total_proteinas_g: Math.round(manualItems.reduce((s,i) => s + (i.proteinas_100g * i.gramos / 100), 0)),
+    total_carbohidratos_g: Math.round(manualItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0)),
+    total_grasas_g: Math.round(manualItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0)),
+    total_fibra_g: Math.round(manualItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0)),
+    vitaminas_destacadas: analysisMeta.vitaminas_destacadas || [],
+    confianza: analysisMeta.confianza || null,
+    notas: analysisMeta.notas || ''
+  };
+
+  let saveOk = await storageSet(`meals:${entry.timestamp}`, entry);
+  if (!saveOk && entry.foto){
+    const entrySinFoto = { ...entry, foto: '' };
+    saveOk = await storageSet(`meals:${entry.timestamp}`, entrySinFoto);
+  }
+  if (!saveOk){
+    btn.disabled = false;
+    statusEl.innerHTML = `<div class="error">No se pudo guardar — el almacenamiento podría estar lleno. Prueba a borrar algún plato antiguo con foto en "Mis platos".</div>`;
+    return;
+  }
+
+  pendingEntryDate = null;
+  pendingEntrySlot = null;
+  renderPendingBanner();
+  closeModal();
+  triggerSaveSuccessOverlay();
+}
+
+function triggerSaveSuccessOverlay(){
+  const overlay = document.getElementById('saveSuccessOverlay');
+  if (overlay){
+    overlay.hidden = false;
+    overlay.classList.add('show');
+    setTimeout(() => {
+      overlay.classList.remove('show');
+      setTimeout(() => {
+        overlay.hidden = true;
+        resetCaptureUI();
+        resetWizardState();
+      }, 550);
+    }, 900);
+  } else {
+    resetCaptureUI();
+    resetWizardState();
   }
 }
 
-function openGramsModalForNewMeal(product){
-  openModal(`
-    <div class="modal-head"><h3>${escapeHtml(product.nombre)}</h3><button class="modal-close" id="gnClose">✕</button></div>
-    <div class="notes" style="margin-bottom:10px;">${escapeHtml(product.marca||'')} · ${product.kcal_100g} kcal/100g</div>
-    <div class="field"><label>Cantidad (g)</label><input type="number" id="gnGramos" value="100" inputmode="decimal"></div>
-    <button class="primary" id="gnAddBtn">Continuar</button>
-  `);
-  document.getElementById('gnClose').addEventListener('click', closeModal);
-  document.getElementById('gnAddBtn').addEventListener('click', () => {
-    const gramos = parseFloat(document.getElementById('gnGramos').value) || 100;
-    closeModal();
-    manualItems = [{
-      nombre: product.nombre,
-      gramos,
-      kcal_100g: product.kcal_100g || 0,
-      proteinas_100g: product.proteinas_100g || 0,
-      carbohidratos_100g: product.carbohidratos_100g || 0,
-      grasas_100g: product.grasas_100g || 0,
-      fibra_100g: product.fibra_100g || 0,
-      foto: product.foto || ''
-    }];
-    analysisMeta = { vitaminas_destacadas: [], confianza: 'alta', notas: 'Producto de Open Food Facts.' };
-    lastAnalysisSource = 'producto';
-    finishManualEntry();
-  });
+function resetWizardState(){
+  manualItems = [];
+  analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
+  lastAnalysisSource = null;
+  lastAnalysisGramosOriginal = 0;
+  wizardMealName = '';
+  wizardSlot = null;
+  wizardDestino = 'plato';
 }
 
 async function buildIngredientsContext(){
@@ -1393,58 +1618,6 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional ni markdown, con esta
 
 function dataUrlToBase64(dataUrl){ return (dataUrl || '').split(',')[1] || ''; }
 
-function applyAnalysisResult(parsed, source){
-  manualItems = (parsed.alimentos || []).map(a => ({
-    nombre: a.nombre || 'Alimento',
-    gramos: Number(a.cantidad_g) || 100,
-    kcal_100g: Number(a.kcal_100g) || 0,
-    proteinas_100g: Number(a.proteinas_100g) || 0,
-    carbohidratos_100g: Number(a.carbohidratos_100g) || 0,
-    grasas_100g: Number(a.grasas_100g) || 0,
-    fibra_100g: Number(a.fibra_100g) || 0
-  }));
-  analysisMeta = {
-    vitaminas_destacadas: parsed.vitaminas_destacadas || [],
-    confianza: parsed.confianza || null,
-    notas: parsed.notas || ''
-  };
-  lastAnalysisSource = source || null;
-  lastAnalysisGramosOriginal = manualItems.reduce((s,i) => s + i.gramos, 0);
-  if (source === 'foto' || source === 'texto'){
-    openWeightReviewModal();
-  } else {
-    renderManualItemsList();
-  }
-}
-
-function openWeightReviewModal(){
-  const fotoPreview = (currentBase64 && preview && preview.src) ? preview.src : '';
-  openModal(`
-    <div class="modal-head"><h3>Revisa los pesos</h3><button class="modal-close" id="wrClose">✕</button></div>
-    ${fotoPreview ? `<img src="${fotoPreview}" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--radius-md);border:var(--border-w) solid var(--ink);margin-bottom:12px;" alt="">` : ''}
-    <p class="notes" style="margin:0 0 10px;">Ajusta el peso de cada ingrediente si no coincide con lo que ves. Luego podrás ver el desglose de kcal.</p>
-    <div id="wrList">
-      ${manualItems.map((i, idx) => `
-        <div class="field-row" style="align-items:flex-end;">
-          <div class="field" style="flex:2;"><label>${escapeHtml(i.nombre)}</label></div>
-          <div class="field" style="flex:1;"><label>Gramos</label><input type="number" data-idx="${idx}" class="wr-gramos-input" value="${i.gramos}" inputmode="decimal"></div>
-        </div>`).join('')}
-    </div>
-    <button class="primary" id="wrNextBtn" style="margin-top:10px;">Siguiente</button>
-  `);
-  document.getElementById('wrClose').addEventListener('click', closeModal);
-  document.querySelectorAll('.wr-gramos-input').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const idx = parseInt(inp.dataset.idx);
-      manualItems[idx].gramos = parseFloat(inp.value) || 0;
-    });
-  });
-  document.getElementById('wrNextBtn').addEventListener('click', () => {
-    closeModal();
-    finishManualEntry();
-  });
-}
-
 async function buildCalibrationParts(){
   let parts = [];
   for (const tipo of ['llano','hondo']){
@@ -1461,33 +1634,6 @@ async function buildCalibrationParts(){
     hint = `\n\nBasándote en correcciones anteriores del usuario, las cantidades reales suelen ser un ${Math.abs(pct)}% ${pct > 0 ? 'mayores' : 'menores'} de lo que una estimación visual ingenua daría — ajusta tu estimación en consecuencia.`;
   }
   return { parts, hint };
-}
-
-async function analyzePlate(){
-  if (!currentBase64) return;
-  errorWrapCalc.innerHTML = '';
-  resultCard.hidden = true;
-  loadingWrap.hidden = false;
-  analyzeBtn.disabled = true;
-
-  const ingredientsContext = await buildIngredientsContext();
-  const { parts: calibParts, hint: factorHint } = await buildCalibrationParts();
-  const prompt = buildAnalysisPrompt(`\n\nApóyate en referencias de tamaño habituales (plato estándar ~26cm, cubiertos, vasos) para estimar las cantidades a partir de la foto.${ingredientsContext}${factorHint}`);
-
-  try {
-    const text = await geminiRequest([
-      ...calibParts,
-      { text: prompt },
-      { inline_data: { mime_type: currentMediaType, data: currentBase64 } }
-    ]);
-    applyAnalysisResult(parseJsonLoose(text), 'foto');
-  } catch (err) {
-    console.error(err);
-    errorWrapCalc.innerHTML = `<div class="error">No se pudo analizar la foto. ${escapeHtml(err.message || 'Inténtalo de nuevo.')}</div>`;
-  } finally {
-    loadingWrap.hidden = true;
-    analyzeBtn.disabled = false;
-  }
 }
 
 document.getElementById('textAnalyzeBtn').addEventListener('click', async () => {
@@ -1797,40 +1943,6 @@ async function openCalibModal(){
   render();
 }
 
-function openEditItemModal(index, onSaved){
-  const item = manualItems[index];
-  openModal(`
-    <div class="modal-head"><h3>Editar ingrediente</h3><button class="modal-close" id="eiClose">✕</button></div>
-    <div class="field"><label>Nombre</label><input type="text" id="eiNombre" value="${escapeHtml(item.nombre)}"></div>
-    <div class="field"><label>Cantidad (g)</label><input type="number" id="eiGramos" value="${item.gramos}" inputmode="decimal"></div>
-    <div class="field"><label>Kcal / 100g</label><input type="number" id="eiKcal100" value="${item.kcal_100g}" inputmode="decimal"></div>
-    <div class="field-row">
-      <div class="field"><label>Proteína g/100g</label><input type="number" id="eiProt" value="${item.proteinas_100g||0}" inputmode="decimal"></div>
-      <div class="field"><label>Carbohidratos g/100g</label><input type="number" id="eiCarb" value="${item.carbohidratos_100g||0}" inputmode="decimal"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Grasas g/100g</label><input type="number" id="eiGrasa" value="${item.grasas_100g||0}" inputmode="decimal"></div>
-      <div class="field"><label>Fibra g/100g</label><input type="number" id="eiFibra" value="${item.fibra_100g||0}" inputmode="decimal"></div>
-    </div>
-    <button class="primary" id="eiSaveBtn">Guardar cambios</button>
-  `);
-  document.getElementById('eiClose').addEventListener('click', closeModal);
-  document.getElementById('eiSaveBtn').addEventListener('click', () => {
-    manualItems[index] = {
-      ...item,
-      nombre: document.getElementById('eiNombre').value.trim() || item.nombre,
-      gramos: parseFloat(document.getElementById('eiGramos').value) || item.gramos,
-      kcal_100g: parseFloat(document.getElementById('eiKcal100').value) || item.kcal_100g,
-      proteinas_100g: parseFloat(document.getElementById('eiProt').value) || 0,
-      carbohidratos_100g: parseFloat(document.getElementById('eiCarb').value) || 0,
-      grasas_100g: parseFloat(document.getElementById('eiGrasa').value) || 0,
-      fibra_100g: parseFloat(document.getElementById('eiFibra').value) || 0
-    };
-    closeModal();
-    if (onSaved) onSaved(); else renderManualItemsList();
-  });
-}
-
 function renderManualItemsList(){
   const wrap = document.getElementById('manualItemsWrap');
   document.getElementById('itemsCard').hidden = !(currentCalcMode === 'crear' || manualItems.length > 0);
@@ -1855,9 +1967,46 @@ function renderManualItemsList(){
     btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx),1); renderManualItemsList(); });
   });
   wrap.querySelectorAll('[data-action="edit"]').forEach(el => {
-    el.addEventListener('click', () => openEditItemModal(parseInt(el.dataset.idx)));
+    el.addEventListener('click', () => openIngredientDetailModalFromManualList(parseInt(el.dataset.idx)));
   });
-  document.getElementById('finishManualBtn').addEventListener('click', finishManualEntry);
+  document.getElementById('finishManualBtn').addEventListener('click', () => {
+    lastAnalysisSource = lastAnalysisSource || 'texto';
+    openWizardStep1();
+  });
+}
+
+function openIngredientDetailModalFromManualList(idx){
+  const item = manualItems[idx];
+  openModal(`
+    <div class="modal-head"><h3>Editar ingrediente</h3><button class="modal-close" id="mlClose">✕</button></div>
+    <div class="field"><label>Nombre</label><input type="text" id="mlNombre" value="${escapeHtml(item.nombre)}"></div>
+    <div class="field"><label>Cantidad (g)</label><input type="number" id="mlGramos" value="${item.gramos}" inputmode="decimal"></div>
+    <div class="field"><label>Kcal / 100g</label><input type="number" id="mlKcal100" value="${item.kcal_100g}" inputmode="decimal"></div>
+    <div class="field-row">
+      <div class="field"><label>Proteína g/100g</label><input type="number" id="mlProt" value="${item.proteinas_100g||0}" inputmode="decimal"></div>
+      <div class="field"><label>Carbohidratos g/100g</label><input type="number" id="mlCarb" value="${item.carbohidratos_100g||0}" inputmode="decimal"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Grasas g/100g</label><input type="number" id="mlGrasa" value="${item.grasas_100g||0}" inputmode="decimal"></div>
+      <div class="field"><label>Fibra g/100g</label><input type="number" id="mlFibra" value="${item.fibra_100g||0}" inputmode="decimal"></div>
+    </div>
+    <button class="primary" id="mlSaveBtn">Guardar cambios</button>
+  `);
+  document.getElementById('mlClose').addEventListener('click', closeModal);
+  document.getElementById('mlSaveBtn').addEventListener('click', () => {
+    manualItems[idx] = {
+      ...item,
+      nombre: document.getElementById('mlNombre').value.trim() || item.nombre,
+      gramos: parseFloat(document.getElementById('mlGramos').value) || item.gramos,
+      kcal_100g: parseFloat(document.getElementById('mlKcal100').value) || item.kcal_100g,
+      proteinas_100g: parseFloat(document.getElementById('mlProt').value) || 0,
+      carbohidratos_100g: parseFloat(document.getElementById('mlCarb').value) || 0,
+      grasas_100g: parseFloat(document.getElementById('mlGrasa').value) || 0,
+      fibra_100g: parseFloat(document.getElementById('mlFibra').value) || 0
+    };
+    closeModal();
+    renderManualItemsList();
+  });
 }
 
 async function learnFromCorrection(){
@@ -1873,206 +2022,6 @@ async function learnFromCorrection(){
 
 let lastManualItemsSnapshot = [];
 let lastAnalysisMetaSnapshot = { vitaminas_destacadas: [], confianza: null, notas: '' };
-
-function finishManualEntry(){
-  learnFromCorrection();
-  lastManualItemsSnapshot = manualItems.map(i => ({...i}));
-  lastAnalysisMetaSnapshot = { ...analysisMeta };
-  const parsed = {
-    alimentos: manualItems.map(i => ({
-      nombre: i.nombre,
-      cantidad_estimada: `${Math.round(i.gramos)} g`,
-      kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
-    })),
-    total_kcal: manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0),
-    total_proteinas_g: manualItems.reduce((s,i) => s + (i.proteinas_100g * i.gramos / 100), 0),
-    total_carbohidratos_g: manualItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0),
-    total_grasas_g: manualItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0),
-    total_fibra_g: manualItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0),
-    foto: (manualItems[0] && manualItems[0].foto) || repeatedMealFoto || '',
-    vitaminas_destacadas: analysisMeta.vitaminas_destacadas,
-    confianza: analysisMeta.confianza || 'alta',
-    notas: analysisMeta.notas || 'Cantidades y alimentos ajustados manualmente antes de guardar.'
-  };
-  renderCalcResult(parsed);
-  manualItems = [];
-  analysisMeta = { vitaminas_destacadas: [], confianza: null, notas: '' };
-  repeatedMealFoto = '';
-  lastAnalysisSource = null;
-  lastAnalysisGramosOriginal = 0;
-  document.getElementById('manualItemsWrap').innerHTML = '';
-  document.getElementById('itemsCard').hidden = currentCalcMode !== 'crear';
-}
-
-function openCorrectIngredientsModal(onDone){
-  manualItems = lastManualItemsSnapshot.map(i => ({...i}));
-  analysisMeta = { ...lastAnalysisMetaSnapshot };
-
-  function renderCorrectList(){
-    openModal(`
-      <div class="modal-head"><h3>Corregir ingredientes</h3><button class="modal-close" id="ciClose">✕</button></div>
-      <p class="notes" style="margin:0 0 10px;">Ajusta kcal/100g y macronutrientes si no cuadran.</p>
-      <div id="ciList">
-        ${manualItems.map((i, idx) => `
-          <div class="food-row">
-            <div style="cursor:pointer;" data-action="edit" data-idx="${idx}">
-              <div class="food-name">${escapeHtml(i.nombre)} <span style="opacity:.5;">✏️</span></div>
-              <div class="food-meta">${i.gramos} g</div>
-            </div>
-            <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
-          </div>`).join('')}
-      </div>
-      <button class="primary" id="ciDoneBtn" style="margin-top:12px;">Listo</button>
-    `);
-    document.getElementById('ciClose').addEventListener('click', closeModal);
-    document.querySelectorAll('#ciList [data-action="edit"]').forEach(el => {
-      el.addEventListener('click', () => openEditItemModal(parseInt(el.dataset.idx), renderCorrectList));
-    });
-    document.getElementById('ciDoneBtn').addEventListener('click', () => {
-      closeModal();
-      lastManualItemsSnapshot = manualItems.map(i => ({...i}));
-      if (onDone) onDone(manualItems);
-    });
-  }
-  renderCorrectList();
-}
-
-function renderCalcResult(parsed){
-  const defaultName = defaultDishName(parsed.alimentos);
-  const defaultSlot = pendingEntrySlot || guessSlot();
-
-  resultCard.innerHTML = `
-    ${renderFoodRows(parsed.alimentos)}
-    <div class="total-row">
-      <span class="lbl">Total estimado</span>
-      <span class="val">${Math.round(parsed.total_kcal||0)} kcal</span>
-    </div>
-    ${lastManualItemsSnapshot.length ? `<button class="ghost" id="correctIngredientsBtn" style="width:100%;margin:8px 0;">✏️ Corregir ingredientes</button>` : ''}
-    ${renderMacroGrid(parsed)}
-    ${renderVitTags(parsed.vitaminas_destacadas)}
-    ${parsed.confianza ? `<span class="confidence">confianza: ${escapeHtml(parsed.confianza)}</span>` : ''}
-    ${parsed.notas ? `<div class="notes">${escapeHtml(parsed.notas)}</div>` : ''}
-
-    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;">
-      <div class="field"><label>Nombre del plato</label><input type="text" id="dishNameInput" value="${escapeHtml(defaultName)}"></div>
-      <div class="field">
-        <label>¿Para qué comida es?</label>
-        <div class="pill-group" id="slotPills">
-          ${Object.entries(SLOT_LABELS).map(([key,label]) => `<button type="button" class="pill ${key===defaultSlot?'active':''}" data-slot="${key}">${label}</button>`).join('')}
-        </div>
-      </div>
-      <button class="primary" id="saveMealBtn">Guardar en el diario</button>
-    </div>
-  `;
-  resultCard.hidden = false;
-
-  let selectedSlot = defaultSlot;
-  resultCard.querySelectorAll('#slotPills .pill').forEach(p => {
-    p.addEventListener('click', () => {
-      resultCard.querySelectorAll('#slotPills .pill').forEach(x => x.classList.remove('active'));
-      p.classList.add('active');
-      selectedSlot = p.dataset.slot;
-    });
-  });
-  const correctBtn = document.getElementById('correctIngredientsBtn');
-  if (correctBtn){
-    correctBtn.addEventListener('click', () => {
-      openCorrectIngredientsModal((correctedItems) => {
-        const updatedParsed = {
-          ...parsed,
-          alimentos: correctedItems.map(i => ({
-            nombre: i.nombre,
-            cantidad_estimada: `${Math.round(i.gramos)} g`,
-            kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
-          })),
-          total_kcal: correctedItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0),
-          total_proteinas_g: correctedItems.reduce((s,i) => s + (i.proteinas_100g * i.gramos / 100), 0),
-          total_carbohidratos_g: correctedItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0),
-          total_grasas_g: correctedItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0),
-          total_fibra_g: correctedItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0)
-        };
-        renderCalcResult(updatedParsed);
-      });
-    });
-  }
-
-  document.getElementById('saveMealBtn').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    btn.textContent = 'Guardando…';
-    const nombre = document.getElementById('dishNameInput').value.trim() || defaultName;
-
-    let fotoFinal = '';
-    try{
-      if (currentBase64 && preview.src){
-        fotoFinal = await makeThumbnail(preview.src, 220);
-      } else if (parsed.foto){
-        fotoFinal = parsed.foto;
-      }
-    }catch(err){ console.error('thumbnail', err); }
-
-    const entry = {
-      timestamp: (() => {
-        if (!pendingEntryDate) return Date.now();
-        const d = parseDateKey(pendingEntryDate);
-        const now = new Date();
-        d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-        return d.getTime();
-      })(),
-      slot: selectedSlot,
-      nombre,
-      foto: fotoFinal,
-      alimentos: parsed.alimentos || [],
-      total_kcal: Math.round(parsed.total_kcal||0),
-      total_proteinas_g: Math.round(parsed.total_proteinas_g||0),
-      total_carbohidratos_g: Math.round(parsed.total_carbohidratos_g||0),
-      total_grasas_g: Math.round(parsed.total_grasas_g||0),
-      total_fibra_g: Math.round(parsed.total_fibra_g||0),
-      vitaminas_destacadas: parsed.vitaminas_destacadas || [],
-      confianza: parsed.confianza || null,
-      notas: parsed.notas || ''
-    };
-    let saveOk = await storageSet(`meals:${entry.timestamp}`, entry);
-
-    if (!saveOk && entry.foto){
-      // probablemente la foto ha hecho que el registro sea demasiado grande: reintentamos sin ella
-      // para no perder el resto de datos del plato.
-      const entrySinFoto = { ...entry, foto: '' };
-      saveOk = await storageSet(`meals:${entry.timestamp}`, entrySinFoto);
-      if (saveOk) entry.foto = '';
-    }
-
-    if (!saveOk){
-      btn.disabled = false;
-      btn.textContent = 'Guardar en el diario';
-      errorWrapCalc.innerHTML = `<div class="error">No se pudo guardar el plato — el almacenamiento podría estar lleno. Prueba a borrar algún plato antiguo con foto en "Mis platos" (las fotos ocupan más espacio) y vuelve a intentarlo. También puedes hacer una copia de seguridad desde Ajustes ⚙ antes de que pase esto.</div>`;
-      return;
-    }
-
-    const allMeals = await loadAllMeals();
-    const todayKey = dateKey(new Date(entry.timestamp));
-    const sameSlotToday = allMeals.filter(m => m.slot === selectedSlot && dateKey(new Date(m.timestamp)) === todayKey);
-    const slotTotalKcal = sameSlotToday.reduce((s,m) => s + (m.total_kcal||0), 0);
-    const esHoy = todayKey === dateKey(new Date());
-    pendingEntryDate = null;
-    pendingEntrySlot = null;
-    renderPendingBanner();
-
-    btn.textContent = 'Guardado ✓';
-    const msg = document.createElement('p');
-    msg.className = 'semaforo-note';
-    msg.style.marginTop = '8px';
-    msg.textContent = `Añadido a ${SLOT_LABELS[selectedSlot]}${esHoy ? ' de hoy' : ''} (${sameSlotToday.length} registro${sameSlotToday.length===1?'':'s'}, ${Math.round(slotTotalKcal)} kcal en total).${(!entry.foto && fotoFinal) ? ' (Se guardó sin la foto: no había espacio suficiente.)' : ''}`;
-    btn.insertAdjacentElement('afterend', msg);
-
-    const newPhotoBtn = document.createElement('button');
-    newPhotoBtn.className = 'ghost';
-    newPhotoBtn.textContent = 'Nueva foto';
-    newPhotoBtn.style.marginTop = '8px';
-    newPhotoBtn.addEventListener('click', resetCaptureUI);
-    msg.insertAdjacentElement('afterend', newPhotoBtn);
-  });
-}
 
 function makeThumbnail(dataUrl, maxDim){
   return new Promise((resolve, reject) => {
