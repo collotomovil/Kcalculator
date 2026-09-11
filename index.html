@@ -340,6 +340,7 @@
   .mode-grid-flat button{
     aspect-ratio:auto;padding:13px 4px;font-size:14px;
   }
+  .mode-grid-flat button .mg-icon{font-size:20px;}
   .mode-grid button .mg-icon{font-size:28px;line-height:1;}
   .mode-grid button.active{background:var(--mango);color:#fff;}
   html[data-style="nube"] .mode-grid button{border:none;}
@@ -525,9 +526,9 @@
   <div id="tab-diario" class="tab-panel" hidden>
     <h2 class="tab-title">Mi diario</h2>
     <div class="mode-grid mode-grid-flat" id="diarioViewToggle">
-      <button class="active" data-view="dia">Día</button>
-      <button data-view="semana">Semana</button>
-      <button data-view="mes">Mes</button>
+      <button class="active" data-view="dia"><span class="mg-icon">📅</span><span>Día</span></button>
+      <button data-view="semana"><span class="mg-icon">📊</span><span>Semana</span></button>
+      <button data-view="mes"><span class="mg-icon">🗓️</span><span>Mes</span></button>
     </div>
     <div id="diarioContent"></div>
   </div>
@@ -538,7 +539,7 @@
     <div class="field search-box">
       <input type="text" id="platosSearch" placeholder="Buscar por nombre o ingrediente…">
     </div>
-    <div class="card" id="platosList"></div>
+    <div class="card scroll-box" id="platosList"></div>
   </div>
 
   <!-- ===================== MIS INGREDIENTES ===================== -->
@@ -555,6 +556,16 @@
         <button class="ghost" id="scanBarcodeBtn">📷 Escanear código de barras (foto)</button>
         <input type="file" id="barcodePhoto" accept="image/*" capture="environment" hidden>
         <div id="barcodeStatus"></div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>🔎 Buscar en Open Food Facts</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="ingOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
+            <button class="small-ghost" id="ingOffSearchBtn">Buscar</button>
+          </div>
+        </div>
+        <div id="ingOffSearchStatus"></div>
+        <div id="ingOffSearchResults"></div>
 
         <div style="margin-top:14px;">
           <div class="field"><label>Nombre</label><input type="text" id="ingNombre" placeholder="Ej. Pechuga de pollo"></div>
@@ -581,7 +592,7 @@
       </div>
     </div>
 
-    <div class="card" id="ingredientesList"></div>
+    <div class="card scroll-box" id="ingredientesList"></div>
   </div>
 
   <!-- ===================== PLANIFICADOR ===================== -->
@@ -647,7 +658,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.1<br>
+    Versión 1.2<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1693,43 +1704,6 @@ async function renderRepeatList(){
   });
 }
 
-async function searchOffFood(){
-  const query = document.getElementById('offSearchInput').value.trim();
-  if (!query) return;
-  const statusEl = document.getElementById('offSearchStatus');
-  const resultsEl = document.getElementById('offSearchResults');
-  statusEl.innerHTML = `<div class="loading">Buscando…<div class="bar"></div></div>`;
-  resultsEl.innerHTML = '';
-  try {
-    const own = await loadAllIngredients();
-    const q = query.toLowerCase();
-    const ownMatches = own
-      .filter(i => i.nombre.toLowerCase().includes(q) || (i.marca||'').toLowerCase().includes(q))
-      .map(i => ({ nombre: i.nombre, marca: i.marca, kcal_100g: i.kcal_100g, proteinas_100g: i.proteinas_100g, carbohidratos_100g: i.carbohidratos_100g, grasas_100g: i.grasas_100g, fibra_100g: i.fibra_100g, foto: i.foto, propio: true }));
-
-    const offResults = await offSearchByName(query);
-    const results = [...ownMatches, ...offResults];
-
-    statusEl.innerHTML = '';
-    if (!results.length){
-      resultsEl.innerHTML = `<div class="empty-state">Sin resultados para "${escapeHtml(query)}".</div>`;
-      return;
-    }
-    resultsEl.innerHTML = results.map((r, i) => `
-      <div class="list-row" data-idx="${i}" style="cursor:pointer;">
-        <div class="lr-left">
-          <div class="lr-title">${r.propio ? '🌟 ' : ''}${escapeHtml(r.nombre)}${r.marca ? ' · '+escapeHtml(r.marca) : ''}</div>
-          <div class="lr-sub">${r.kcal_100g} kcal/100g${r.propio ? ' · tuyo' : ''}</div>
-        </div>
-      </div>`).join('');
-    resultsEl.querySelectorAll('.list-row').forEach(row => {
-      row.addEventListener('click', () => openGramsModal(results[parseInt(row.dataset.idx)]));
-    });
-  } catch (err){
-    console.error(err);
-    statusEl.innerHTML = `<div class="error">No se pudo buscar. Revisa tu conexión e inténtalo de nuevo.</div>`;
-  }
-}
 
 function openGramsModal(product){
   openModal(`
@@ -3439,6 +3413,17 @@ document.getElementById('planAiSuggest').addEventListener('click', () => {
   document.getElementById('aiGenerateBtn').addEventListener('click', generateAiWeekPlan);
 });
 
+async function buildHabitsContext(){
+  const meals = await loadAllMeals();
+  if (!meals.length) return '';
+  const recent = meals.slice(0, 40);
+  const nombresFrecuentes = {};
+  recent.forEach(m => { nombresFrecuentes[m.nombre] = (nombresFrecuentes[m.nombre]||0) + 1; });
+  const topPlatos = Object.entries(nombresFrecuentes).sort((a,b) => b[1]-a[1]).slice(0,12).map(([n]) => n);
+  if (!topPlatos.length) return '';
+  return `\n\nEl usuario suele comer habitualmente (por orden de frecuencia reciente): ${topPlatos.join(', ')}. Ten esto en cuenta como referencia de sus gustos y platos típicos, pero no te limites solo a repetirlos — puedes proponer variaciones o alternativas parecidas.`;
+}
+
 async function generateAiWeekPlan(){
   const btn = document.getElementById('aiGenerateBtn');
   const statusEl = document.getElementById('aiSuggestStatus');
@@ -3447,7 +3432,16 @@ async function generateAiWeekPlan(){
   btn.disabled = true;
   statusEl.innerHTML = `<div class="loading">Generando menú semanal…<div class="bar"></div></div>`;
 
-  const prompt = `Genera un plan de comidas para 7 días (Lunes a Domingo) para una persona con un objetivo de ${kcalObjetivo} kcal/día aproximadamente. Preferencias o restricciones: ${preferencias || 'ninguna en particular'}. Para cada día indica desayuno, comida, cena y algo para entre horas, con nombres de plato cortos (máximo 4 palabras) y kcal estimadas de cada uno, de forma que la suma diaria se acerque al objetivo. Responde ÚNICAMENTE con JSON, sin texto adicional ni markdown, con esta estructura: {"dias":[{"dia":"Lunes","desayuno":{"nombre":"","kcal":0},"comida":{"nombre":"","kcal":0},"cena":{"nombre":"","kcal":0},"entre_horas":{"nombre":"","kcal":0}}], "notas":""} — el array "dias" debe tener exactamente 7 elementos, en orden de Lunes a Domingo.`;
+  const profile = await getProfile();
+  const goals = computeGoals(profile);
+  const habitsContext = await buildHabitsContext();
+  const macrosTexto = goals
+    ? `Objetivo diario aproximado de macronutrientes: ${goals.prot_g}g proteína, ${goals.carb_g}g carbohidratos, ${goals.grasa_g}g grasas, ${goals.fibra_g}g fibra. Reparte los platos de la semana para que, en conjunto, se acerquen a estos objetivos — presta especial atención a no dejar cortos la proteína ni la fibra, que suelen ser los nutrientes más difíciles de cubrir.`
+    : '';
+
+  const prompt = `Genera un plan de comidas para 7 días (Lunes a Domingo) para una persona con un objetivo de ${kcalObjetivo} kcal/día aproximadamente. Preferencias o restricciones: ${preferencias || 'ninguna en particular'}.${habitsContext} ${macrosTexto}
+
+Para cada día indica desayuno, comida, cena y algo para entre horas, con nombres de plato cortos (máximo 4 palabras), kcal estimadas y macronutrientes estimados (proteína, carbohidratos, grasas, fibra en gramos) de cada uno, de forma que la suma diaria se acerque al objetivo de kcal y, a lo largo de la semana, se cubran razonablemente los objetivos de macros. Responde ÚNICAMENTE con JSON, sin texto adicional ni markdown, con esta estructura exacta: {"dias":[{"dia":"Lunes","desayuno":{"nombre":"","kcal":0,"prot_g":0,"carb_g":0,"grasa_g":0,"fibra_g":0},"comida":{"nombre":"","kcal":0,"prot_g":0,"carb_g":0,"grasa_g":0,"fibra_g":0},"cena":{"nombre":"","kcal":0,"prot_g":0,"carb_g":0,"grasa_g":0,"fibra_g":0},"entre_horas":{"nombre":"","kcal":0,"prot_g":0,"carb_g":0,"grasa_g":0,"fibra_g":0}}], "notas":""} — el array "dias" debe tener exactamente 7 elementos, en orden de Lunes a Domingo.`;
 
   try {
     const text = await geminiRequest([{ text: prompt }]);
@@ -3457,7 +3451,15 @@ async function generateAiWeekPlan(){
       if (!currentPlan.dias[i]) return;
       ['desayuno','comida','cena','entre_horas'].forEach(sk => {
         if (d[sk] && d[sk].nombre){
-          currentPlan.dias[i][sk] = { nombre: d[sk].nombre, kcal: Math.round(d[sk].kcal||0), origen: 'ia' };
+          currentPlan.dias[i][sk] = {
+            nombre: d[sk].nombre,
+            kcal: Math.round(d[sk].kcal||0),
+            prot_g: Math.round(d[sk].prot_g||0),
+            carb_g: Math.round(d[sk].carb_g||0),
+            grasa_g: Math.round(d[sk].grasa_g||0),
+            fibra_g: Math.round(d[sk].fibra_g||0),
+            origen: 'ia'
+          };
         }
       });
     });
@@ -3512,8 +3514,6 @@ async function importBackup(file){
   }
   return count;
 }
-
-document.getElementById('calibHintBtn').addEventListener('click', () => openCalibModal());
 
 document.getElementById('calibHintBtn').addEventListener('click', () => openSettingsModal('calibSectionAjustes'));
 document.getElementById('settingsBtn').addEventListener('click', () => openSettingsModal());
