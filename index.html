@@ -452,7 +452,7 @@
     <div class="pending-banner" id="pendingEntryBanner" hidden></div>
     <label style="display:block;font-family:var(--font-display);font-size:18px;margin-bottom:8px;">¿Qué vas a comer ahora?</label>
     <div class="mode-grid" id="calcModeToggle">
-      <button data-mode="crear"><span class="mg-icon">🧩</span><span>Tu plato personalizado</span></button>
+      <button data-mode="crear"><span class="mg-icon">✍️</span><span>Describir plato</span></button>
       <button class="active" data-mode="foto"><span class="mg-icon">📷</span><span>Sacar foto</span></button>
       <button data-mode="repetir"><span class="mg-icon">🔁</span><span>Plato guardado</span></button>
     </div>
@@ -472,6 +472,14 @@
 
       <div id="previewWrap" hidden>
         <img id="preview" alt="Vista previa del plato">
+        <div class="field" style="margin-top:12px;">
+          <label>¿Qué es esta foto?</label>
+          <div class="pill-group" id="fotoTipoPills">
+            <button type="button" class="pill active" data-tipo="plato">🍽️ Plato elaborado</button>
+            <button type="button" class="pill" data-tipo="producto_barcode">🏷️ Producto (código de barras)</button>
+            <button type="button" class="pill" data-tipo="producto_buscar">🔎 Producto (buscar nombre)</button>
+          </div>
+        </div>
         <button class="primary" id="analyzeBtn">Analizar plato</button>
         <button class="ghost" id="retakeBtn">Elegir otra foto</button>
       </div>
@@ -496,22 +504,7 @@
     </div>
 
     <div class="card" id="itemsCard" hidden>
-      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:18px;">Tu plato personalizado</h4>
       <div id="manualItemsWrap"></div>
-      <button class="ghost" type="button" id="toggleAddIngredientBtn" style="margin-top:12px;width:100%;">+ Añadir producto/ingrediente</button>
-      <div id="addIngredientPanel" hidden>
-        <div class="field" style="margin-top:12px;">
-          <label>Buscar (tuyos primero, luego Open Food Facts)</label>
-          <div style="display:flex;gap:6px;">
-            <input type="text" id="offSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;">
-            <button class="small-ghost" id="offSearchBtn">Buscar</button>
-          </div>
-        </div>
-        <div id="offSearchStatus"></div>
-        <div id="offSearchResults"></div>
-        <h4 style="margin:14px 0 8px;font-family:var(--font-display);font-size:15px;">Tus ingredientes registrados</h4>
-        <div id="ownIngredientsGrid" class="own-ing-grid"></div>
-      </div>
     </div>
 
     <div id="errorWrapCalc"></div>
@@ -559,16 +552,6 @@
         <input type="file" id="barcodePhoto" accept="image/*" capture="environment" hidden>
         <div id="barcodeStatus"></div>
 
-        <div class="field" style="margin-top:14px;">
-          <label>🔎 Buscar en Open Food Facts</label>
-          <div style="display:flex;gap:6px;">
-            <input type="text" id="ingOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
-            <button class="small-ghost" id="ingOffSearchBtn">Buscar</button>
-          </div>
-        </div>
-        <div id="ingOffSearchStatus"></div>
-        <div id="ingOffSearchResults"></div>
-
         <div style="margin-top:14px;">
           <div class="field"><label>Nombre</label><input type="text" id="ingNombre" placeholder="Ej. Pechuga de pollo"></div>
           <div class="field"><label>Marca (opcional)</label><input type="text" id="ingMarca" placeholder="Ej. Marca X"></div>
@@ -609,15 +592,10 @@
     <div id="planContent"></div>
 
     <h2 class="tab-title" style="margin-top:26px;">Progreso</h2>
-    <p style="font-size:13.5px;color:var(--ink-soft);margin-top:-8px;line-height:1.5;">
-      Registra tu peso una vez por semana y compáralo con las kcal que has consumido esa semana. La IA puede analizar varias semanas juntas y avisarte de incongruencias (por ejemplo, cumplir el objetivo y no perder peso, o al revés).
-    </p>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin-top:-8px;line-height:1.5;">Registra tu peso una vez por semana y compáralo con las kcal que has consumido esa semana. La IA puede analizar varias semanas juntas y avisarte de incongruencias.</p>
+    <div class="card"><h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:16px;">Kcal semanales y peso</h4><div id="progChartWrap"></div></div>
     <div class="card">
-      <div class="date-nav">
-        <button id="progPrevWeek">‹</button>
-        <div class="date-label" id="progWeekLabel">—</div>
-        <button id="progNextWeek">›</button>
-      </div>
+      <div class="date-nav"><button id="progPrevWeek">‹</button><div class="date-label" id="progWeekLabel">—</div><button id="progNextWeek">›</button></div>
       <div class="field"><label>Tu peso esta semana (kg)</label><input type="number" id="progPesoInput" inputmode="decimal" placeholder="Ej. 78.5"></div>
       <button class="small-ghost" id="progSaveBtn">Guardar peso de esta semana</button>
       <div class="total-row" style="margin-top:12px;"><span class="lbl">Kcal consumidas esta semana</span><span class="val" id="progKcalSemana">—</span></div>
@@ -680,7 +658,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 0.7<br>
+    Versión 1.0<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1273,7 +1251,124 @@ function resetCaptureUI(){
   resultCard.hidden = true;
 }
 
-analyzeBtn.addEventListener('click', analyzePlate);
+let fotoTipoSeleccionado = 'plato';
+document.querySelectorAll('#fotoTipoPills .pill').forEach(p => {
+  p.addEventListener('click', () => {
+    document.querySelectorAll('#fotoTipoPills .pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+    fotoTipoSeleccionado = p.dataset.tipo;
+    analyzeBtn.textContent = fotoTipoSeleccionado === 'plato' ? 'Analizar plato' : 'Buscar producto';
+  });
+});
+
+analyzeBtn.addEventListener('click', () => {
+  if (fotoTipoSeleccionado === 'plato') return analyzePlate();
+  if (fotoTipoSeleccionado === 'producto_barcode') return analyzeProductBarcodeFromPhoto();
+  if (fotoTipoSeleccionado === 'producto_buscar') return openProductSearchFromPhoto();
+});
+
+async function analyzeProductBarcodeFromPhoto(){
+  errorWrapCalc.innerHTML = '';
+  loadingWrap.hidden = false;
+  analyzeBtn.disabled = true;
+  try {
+    const code = await decodeBarcodeFromImage(preview.src);
+    if (!code){
+      errorWrapCalc.innerHTML = `<div class="error">No se pudo leer el código de barras en la foto. Prueba con "Producto (buscar nombre)" o acércate más al código.</div>`;
+      return;
+    }
+    const product = await offGetByBarcode(code);
+    if (!product || !product.nombre){
+      errorWrapCalc.innerHTML = `<div class="error">Código ${escapeHtml(code)} leído pero no está en Open Food Facts. Prueba a buscarlo por nombre.</div>`;
+      return;
+    }
+    openGramsModalForNewMeal(product);
+  } catch (err){
+    console.error(err);
+    errorWrapCalc.innerHTML = `<div class="error">${escapeHtml(err.message || 'No se pudo leer el código de barras.')}</div>`;
+  } finally {
+    loadingWrap.hidden = true;
+    analyzeBtn.disabled = false;
+  }
+}
+
+function openProductSearchFromPhoto(){
+  openModal(`
+    <div class="modal-head"><h3>Buscar producto</h3><button class="modal-close" id="psClose">✕</button></div>
+    <div class="field">
+      <label>Nombre del producto</label>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="psSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
+        <button class="small-ghost" id="psSearchBtn">Buscar</button>
+      </div>
+    </div>
+    <div id="psSearchStatus"></div>
+    <div id="psSearchResults"></div>
+  `);
+  document.getElementById('psClose').addEventListener('click', closeModal);
+  document.getElementById('psSearchBtn').addEventListener('click', doProductSearch);
+  document.getElementById('psSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doProductSearch(); });
+
+  async function doProductSearch(){
+    const query = document.getElementById('psSearchInput').value.trim();
+    if (!query) return;
+    const statusEl = document.getElementById('psSearchStatus');
+    const resultsEl = document.getElementById('psSearchResults');
+    statusEl.innerHTML = `<div class="loading">Buscando…<div class="bar"></div></div>`;
+    resultsEl.innerHTML = '';
+    try {
+      const results = await offSearchByName(query);
+      statusEl.innerHTML = '';
+      if (!results.length){
+        resultsEl.innerHTML = `<div class="empty-state">Sin resultados para "${escapeHtml(query)}".</div>`;
+        return;
+      }
+      resultsEl.innerHTML = results.map((r,i) => `
+        <div class="list-row" data-idx="${i}" style="cursor:pointer;">
+          <div class="lr-left">
+            <div class="lr-title">${escapeHtml(r.nombre)}${r.marca ? ' · '+escapeHtml(r.marca) : ''}</div>
+            <div class="lr-sub">${r.kcal_100g} kcal/100g</div>
+          </div>
+        </div>`).join('');
+      resultsEl.querySelectorAll('.list-row').forEach(row => {
+        row.addEventListener('click', () => {
+          closeModal();
+          openGramsModalForNewMeal(results[parseInt(row.dataset.idx)]);
+        });
+      });
+    } catch (err){
+      console.error(err);
+      statusEl.innerHTML = `<div class="error">No se pudo buscar. Revisa tu conexión e inténtalo de nuevo.</div>`;
+    }
+  }
+}
+
+function openGramsModalForNewMeal(product){
+  openModal(`
+    <div class="modal-head"><h3>${escapeHtml(product.nombre)}</h3><button class="modal-close" id="gnClose">✕</button></div>
+    <div class="notes" style="margin-bottom:10px;">${escapeHtml(product.marca||'')} · ${product.kcal_100g} kcal/100g</div>
+    <div class="field"><label>Cantidad (g)</label><input type="number" id="gnGramos" value="100" inputmode="decimal"></div>
+    <button class="primary" id="gnAddBtn">Continuar</button>
+  `);
+  document.getElementById('gnClose').addEventListener('click', closeModal);
+  document.getElementById('gnAddBtn').addEventListener('click', () => {
+    const gramos = parseFloat(document.getElementById('gnGramos').value) || 100;
+    closeModal();
+    manualItems = [{
+      nombre: product.nombre,
+      gramos,
+      kcal_100g: product.kcal_100g || 0,
+      proteinas_100g: product.proteinas_100g || 0,
+      carbohidratos_100g: product.carbohidratos_100g || 0,
+      grasas_100g: product.grasas_100g || 0,
+      fibra_100g: product.fibra_100g || 0,
+      foto: product.foto || ''
+    }];
+    analysisMeta = { vitaminas_destacadas: [], confianza: 'alta', notas: 'Producto de Open Food Facts.' };
+    lastAnalysisSource = 'producto';
+    finishManualEntry();
+  });
+}
 
 async function buildIngredientsContext(){
   const list = await loadAllIngredients();
@@ -1315,7 +1410,39 @@ function applyAnalysisResult(parsed, source){
   };
   lastAnalysisSource = source || null;
   lastAnalysisGramosOriginal = manualItems.reduce((s,i) => s + i.gramos, 0);
-  renderManualItemsList();
+  if (source === 'foto' || source === 'texto'){
+    openWeightReviewModal();
+  } else {
+    renderManualItemsList();
+  }
+}
+
+function openWeightReviewModal(){
+  const fotoPreview = (currentBase64 && preview && preview.src) ? preview.src : '';
+  openModal(`
+    <div class="modal-head"><h3>Revisa los pesos</h3><button class="modal-close" id="wrClose">✕</button></div>
+    ${fotoPreview ? `<img src="${fotoPreview}" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--radius-md);border:var(--border-w) solid var(--ink);margin-bottom:12px;" alt="">` : ''}
+    <p class="notes" style="margin:0 0 10px;">Ajusta el peso de cada ingrediente si no coincide con lo que ves. Luego podrás ver el desglose de kcal.</p>
+    <div id="wrList">
+      ${manualItems.map((i, idx) => `
+        <div class="field-row" style="align-items:flex-end;">
+          <div class="field" style="flex:2;"><label>${escapeHtml(i.nombre)}</label></div>
+          <div class="field" style="flex:1;"><label>Gramos</label><input type="number" data-idx="${idx}" class="wr-gramos-input" value="${i.gramos}" inputmode="decimal"></div>
+        </div>`).join('')}
+    </div>
+    <button class="primary" id="wrNextBtn" style="margin-top:10px;">Siguiente</button>
+  `);
+  document.getElementById('wrClose').addEventListener('click', closeModal);
+  document.querySelectorAll('.wr-gramos-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = parseInt(inp.dataset.idx);
+      manualItems[idx].gramos = parseFloat(inp.value) || 0;
+    });
+  });
+  document.getElementById('wrNextBtn').addEventListener('click', () => {
+    closeModal();
+    finishManualEntry();
+  });
 }
 
 async function buildCalibrationParts(){
@@ -1412,32 +1539,7 @@ calcModeToggle.addEventListener('click', (e) => {
   resultCard.hidden = true;
   errorWrapCalc.innerHTML = '';
   if (currentCalcMode === 'repetir') renderRepeatList();
-  if (currentCalcMode === 'crear') renderOwnIngredientsGrid();
 });
-
-document.getElementById('toggleAddIngredientBtn').addEventListener('click', () => {
-  const panel = document.getElementById('addIngredientPanel');
-  panel.hidden = !panel.hidden;
-  if (!panel.hidden) renderOwnIngredientsGrid();
-});
-
-async function renderOwnIngredientsGrid(){
-  const grid = document.getElementById('ownIngredientsGrid');
-  if (!grid) return;
-  const list = await loadAllIngredients();
-  if (!list.length){
-    grid.innerHTML = `<div class="own-ing-empty-state">Todavía no tienes ingredientes guardados en "Mis ingredientes".</div>`;
-    return;
-  }
-  grid.innerHTML = list.map((i, idx) => `
-    <div class="own-ing-card" data-idx="${idx}">
-      ${i.foto ? `<img src="${escapeHtml(i.foto)}" alt="">` : `<div class="own-ing-empty">🥗</div>`}
-      <div class="own-ing-name">${escapeHtml(i.nombre)}</div>
-    </div>`).join('');
-  grid.querySelectorAll('.own-ing-card').forEach(card => {
-    card.addEventListener('click', () => openGramsModal(list[parseInt(card.dataset.idx)]));
-  });
-}
 
 document.getElementById('repeatSearchInput').addEventListener('input', renderRepeatList);
 
@@ -1484,7 +1586,7 @@ function openEditMealIngredientsModal(mealKey){
     const totals = computeTotals();
     openModal(`
       <div class="modal-head"><h3>Editar ingredientes</h3><button class="modal-close" id="emiClose">✕</button></div>
-      <p class="notes" style="margin:0 0 10px;">Quita lo que no te comiste, ajusta cantidades o añade algo que falte. Los totales del plato se recalculan solos.</p>
+      <p class="notes" style="margin:0 0 10px;">Quita lo que no te comiste o ajusta las cantidades. Los totales del plato se recalculan solos.</p>
       <div id="emiList">
         ${items.length ? items.map((i, idx) => `
           <div class="food-row">
@@ -1498,19 +1600,7 @@ function openEditMealIngredientsModal(mealKey){
             </div>
           </div>`).join('') : `<div class="empty-state">Sin ingredientes — el plato quedaría vacío.</div>`}
       </div>
-      <button class="ghost" type="button" id="emiAddIngBtn" style="margin-top:10px;width:100%;">+ Añadir ingrediente</button>
-      <div id="emiAddIngPanel" hidden style="margin-top:10px;">
-        <div class="field">
-          <label>Buscar (tuyos primero, luego Open Food Facts)</label>
-          <div style="display:flex;gap:6px;">
-            <input type="text" id="emiOffSearchInput" placeholder="Ej. yogur natural, arroz…" style="flex:1;min-width:0;">
-            <button class="small-ghost" id="emiOffSearchBtn">Buscar</button>
-          </div>
-        </div>
-        <div id="emiOffSearchStatus"></div>
-        <div id="emiOffSearchResults"></div>
-      </div>
-      <div class="total-row" style="margin-top:12px;"><span class="lbl">Total</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
+      <div class="total-row" style="margin-top:8px;"><span class="lbl">Total</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
       <button class="primary" id="emiSaveBtn" style="margin-top:10px;">Guardar cambios</button>
       <div id="emiStatus">${statusMsg}</div>
     `);
@@ -1521,61 +1611,7 @@ function openEditMealIngredientsModal(mealKey){
     document.querySelectorAll('#emiList [data-action="edit"]').forEach(el => {
       el.addEventListener('click', () => openEditMealIngredientLineModal(parseInt(el.dataset.idx)));
     });
-    document.getElementById('emiAddIngBtn').addEventListener('click', () => {
-      const panel = document.getElementById('emiAddIngPanel');
-      panel.hidden = !panel.hidden;
-    });
-    document.getElementById('emiOffSearchBtn').addEventListener('click', searchForEmiAdd);
-    document.getElementById('emiOffSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchForEmiAdd(); });
     document.getElementById('emiSaveBtn').addEventListener('click', saveChanges);
-  }
-
-  async function searchForEmiAdd(){
-    const query = document.getElementById('emiOffSearchInput').value.trim();
-    if (!query) return;
-    const statusEl = document.getElementById('emiOffSearchStatus');
-    const resultsEl = document.getElementById('emiOffSearchResults');
-    statusEl.innerHTML = `<div class="loading">Buscando…<div class="bar"></div></div>`;
-    resultsEl.innerHTML = '';
-    try {
-      const own = await loadAllIngredients();
-      const q = query.toLowerCase();
-      const ownMatches = own
-        .filter(i => i.nombre.toLowerCase().includes(q) || (i.marca||'').toLowerCase().includes(q))
-        .map(i => ({ nombre: i.nombre, marca: i.marca, kcal_100g: i.kcal_100g, proteinas_100g: i.proteinas_100g, carbohidratos_100g: i.carbohidratos_100g, grasas_100g: i.grasas_100g, fibra_100g: i.fibra_100g, propio: true }));
-      const offResults = await offSearchByName(query);
-      const results = [...ownMatches, ...offResults];
-      statusEl.innerHTML = '';
-      if (!results.length){
-        resultsEl.innerHTML = `<div class="empty-state">Sin resultados para "${escapeHtml(query)}".</div>`;
-        return;
-      }
-      resultsEl.innerHTML = results.map((r, i) => `
-        <div class="list-row" data-idx="${i}" style="cursor:pointer;">
-          <div class="lr-left">
-            <div class="lr-title">${r.propio ? '🌟 ' : ''}${escapeHtml(r.nombre)}${r.marca ? ' · '+escapeHtml(r.marca) : ''}</div>
-            <div class="lr-sub">${r.kcal_100g} kcal/100g${r.propio ? ' · tuyo' : ''}</div>
-          </div>
-        </div>`).join('');
-      resultsEl.querySelectorAll('.list-row').forEach(row => {
-        row.addEventListener('click', () => {
-          const product = results[parseInt(row.dataset.idx)];
-          items.push({
-            nombre: product.nombre,
-            gramos: 100,
-            kcal_100g: product.kcal_100g || 0,
-            proteinas_100g: product.proteinas_100g || 0,
-            carbohidratos_100g: product.carbohidratos_100g || 0,
-            grasas_100g: product.grasas_100g || 0,
-            fibra_100g: product.fibra_100g || 0
-          });
-          render();
-        });
-      });
-    } catch (err){
-      console.error(err);
-      statusEl.innerHTML = `<div class="error">No se pudo buscar. Revisa tu conexión e inténtalo de nuevo.</div>`;
-    }
   }
 
   function openEditMealIngredientLineModal(idx){
@@ -1667,9 +1703,6 @@ async function renderRepeatList(){
     });
   });
 }
-
-document.getElementById('offSearchBtn').addEventListener('click', searchOffFood);
-document.getElementById('offSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchOffFood(); });
 
 async function searchOffFood(){
   const query = document.getElementById('offSearchInput').value.trim();
@@ -1801,13 +1834,21 @@ async function openCalibModal(){
   render();
 }
 
-function openEditItemModal(index){
+function openEditItemModal(index, onSaved){
   const item = manualItems[index];
   openModal(`
     <div class="modal-head"><h3>Editar ingrediente</h3><button class="modal-close" id="eiClose">✕</button></div>
     <div class="field"><label>Nombre</label><input type="text" id="eiNombre" value="${escapeHtml(item.nombre)}"></div>
     <div class="field"><label>Cantidad (g)</label><input type="number" id="eiGramos" value="${item.gramos}" inputmode="decimal"></div>
     <div class="field"><label>Kcal / 100g</label><input type="number" id="eiKcal100" value="${item.kcal_100g}" inputmode="decimal"></div>
+    <div class="field-row">
+      <div class="field"><label>Proteína g/100g</label><input type="number" id="eiProt" value="${item.proteinas_100g||0}" inputmode="decimal"></div>
+      <div class="field"><label>Carbohidratos g/100g</label><input type="number" id="eiCarb" value="${item.carbohidratos_100g||0}" inputmode="decimal"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Grasas g/100g</label><input type="number" id="eiGrasa" value="${item.grasas_100g||0}" inputmode="decimal"></div>
+      <div class="field"><label>Fibra g/100g</label><input type="number" id="eiFibra" value="${item.fibra_100g||0}" inputmode="decimal"></div>
+    </div>
     <button class="primary" id="eiSaveBtn">Guardar cambios</button>
   `);
   document.getElementById('eiClose').addEventListener('click', closeModal);
@@ -1816,10 +1857,14 @@ function openEditItemModal(index){
       ...item,
       nombre: document.getElementById('eiNombre').value.trim() || item.nombre,
       gramos: parseFloat(document.getElementById('eiGramos').value) || item.gramos,
-      kcal_100g: parseFloat(document.getElementById('eiKcal100').value) || item.kcal_100g
+      kcal_100g: parseFloat(document.getElementById('eiKcal100').value) || item.kcal_100g,
+      proteinas_100g: parseFloat(document.getElementById('eiProt').value) || 0,
+      carbohidratos_100g: parseFloat(document.getElementById('eiCarb').value) || 0,
+      grasas_100g: parseFloat(document.getElementById('eiGrasa').value) || 0,
+      fibra_100g: parseFloat(document.getElementById('eiFibra').value) || 0
     };
     closeModal();
-    renderManualItemsList();
+    if (onSaved) onSaved(); else renderManualItemsList();
   });
 }
 
@@ -1863,8 +1908,13 @@ async function learnFromCorrection(){
   await storageSet(key, actualizado);
 }
 
+let lastManualItemsSnapshot = [];
+let lastAnalysisMetaSnapshot = { vitaminas_destacadas: [], confianza: null, notas: '' };
+
 function finishManualEntry(){
   learnFromCorrection();
+  lastManualItemsSnapshot = manualItems.map(i => ({...i}));
+  lastAnalysisMetaSnapshot = { ...analysisMeta };
   const parsed = {
     alimentos: manualItems.map(i => ({
       nombre: i.nombre,
@@ -1889,8 +1939,39 @@ function finishManualEntry(){
   lastAnalysisGramosOriginal = 0;
   document.getElementById('manualItemsWrap').innerHTML = '';
   document.getElementById('itemsCard').hidden = currentCalcMode !== 'crear';
-  document.getElementById('offSearchResults').innerHTML = '';
-  document.getElementById('offSearchInput').value = '';
+}
+
+function openCorrectIngredientsModal(onDone){
+  manualItems = lastManualItemsSnapshot.map(i => ({...i}));
+  analysisMeta = { ...lastAnalysisMetaSnapshot };
+
+  function renderCorrectList(){
+    openModal(`
+      <div class="modal-head"><h3>Corregir ingredientes</h3><button class="modal-close" id="ciClose">✕</button></div>
+      <p class="notes" style="margin:0 0 10px;">Ajusta kcal/100g y macronutrientes si no cuadran.</p>
+      <div id="ciList">
+        ${manualItems.map((i, idx) => `
+          <div class="food-row">
+            <div style="cursor:pointer;" data-action="edit" data-idx="${idx}">
+              <div class="food-name">${escapeHtml(i.nombre)} <span style="opacity:.5;">✏️</span></div>
+              <div class="food-meta">${i.gramos} g</div>
+            </div>
+            <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
+          </div>`).join('')}
+      </div>
+      <button class="primary" id="ciDoneBtn" style="margin-top:12px;">Listo</button>
+    `);
+    document.getElementById('ciClose').addEventListener('click', closeModal);
+    document.querySelectorAll('#ciList [data-action="edit"]').forEach(el => {
+      el.addEventListener('click', () => openEditItemModal(parseInt(el.dataset.idx), renderCorrectList));
+    });
+    document.getElementById('ciDoneBtn').addEventListener('click', () => {
+      closeModal();
+      lastManualItemsSnapshot = manualItems.map(i => ({...i}));
+      if (onDone) onDone(manualItems);
+    });
+  }
+  renderCorrectList();
 }
 
 function renderCalcResult(parsed){
@@ -1903,6 +1984,7 @@ function renderCalcResult(parsed){
       <span class="lbl">Total estimado</span>
       <span class="val">${Math.round(parsed.total_kcal||0)} kcal</span>
     </div>
+    ${lastManualItemsSnapshot.length ? `<button class="ghost" id="correctIngredientsBtn" style="width:100%;margin:8px 0;">✏️ Corregir ingredientes</button>` : ''}
     ${renderMacroGrid(parsed)}
     ${renderVitTags(parsed.vitaminas_destacadas)}
     ${parsed.confianza ? `<span class="confidence">confianza: ${escapeHtml(parsed.confianza)}</span>` : ''}
@@ -1929,6 +2011,27 @@ function renderCalcResult(parsed){
       selectedSlot = p.dataset.slot;
     });
   });
+  const correctBtn = document.getElementById('correctIngredientsBtn');
+  if (correctBtn){
+    correctBtn.addEventListener('click', () => {
+      openCorrectIngredientsModal((correctedItems) => {
+        const updatedParsed = {
+          ...parsed,
+          alimentos: correctedItems.map(i => ({
+            nombre: i.nombre,
+            cantidad_estimada: `${Math.round(i.gramos)} g`,
+            kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
+          })),
+          total_kcal: correctedItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0),
+          total_proteinas_g: correctedItems.reduce((s,i) => s + (i.proteinas_100g * i.gramos / 100), 0),
+          total_carbohidratos_g: correctedItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0),
+          total_grasas_g: correctedItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0),
+          total_fibra_g: correctedItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0)
+        };
+        renderCalcResult(updatedParsed);
+      });
+    });
+  }
 
   document.getElementById('saveMealBtn').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
@@ -1949,7 +2052,8 @@ function renderCalcResult(parsed){
       timestamp: (() => {
         if (!pendingEntryDate) return Date.now();
         const d = parseDateKey(pendingEntryDate);
-        d.setHours(12, 0, 0, 0);
+        const now = new Date();
+        d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
         return d.getTime();
       })(),
       slot: selectedSlot,
@@ -3138,22 +3242,21 @@ function renderPlanGrid(){
 }
 
 let progRefDate = new Date();
+let progExpandedWeekKey = null;
 
 async function refreshProgreso(){
   const monday = mondayOf(progRefDate);
   const weekKey = dateKey(monday);
   document.getElementById('progWeekLabel').textContent = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
-
   const entry = await storageGet(`progress:${weekKey}`);
   document.getElementById('progPesoInput').value = entry && entry.peso ? entry.peso : '';
-
   const meals = await loadAllMeals();
   const days = Array.from({length:7}, (_,i) => addDays(monday,i));
   const weekKeys = days.map(d => dateKey(d));
   const kcalSemana = meals.filter(m => weekKeys.includes(dateKey(new Date(m.timestamp)))).reduce((s,m) => s + (m.total_kcal||0), 0);
   document.getElementById('progKcalSemana').textContent = `${Math.round(kcalSemana)} kcal`;
-
   await renderProgHistorial();
+  await renderProgChart();
 }
 
 async function renderProgHistorial(){
@@ -3169,6 +3272,99 @@ async function renderProgHistorial(){
     const label = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)}`;
     return `<div class="stat-row"><span>${label}</span><span>${p.peso} kg · ${Math.round(p.kcalSemana||0)} kcal</span></div>`;
   }).join('');
+}
+
+async function renderProgChart(){
+  const wrap = document.getElementById('progChartWrap');
+  const profile = await getProfile();
+  const goals = computeGoals(profile);
+  const objetivoSemanal = goals ? goals.kcal * 7 : null;
+  const objetivoDiario = goals ? goals.kcal : null;
+  const allProgress = await storageListEntries('progress:');
+  allProgress.sort((a,b) => a.key.localeCompare(b.key));
+  if (!allProgress.length){
+    wrap.innerHTML = `<div class="empty-state">Registra al menos una semana para ver la gráfica.</div>`;
+    return;
+  }
+  const meals = await loadAllMeals();
+  const pesos = allProgress.map(p => p.peso).filter(p => p != null);
+  const maxKcal = Math.max(...allProgress.map(p => p.kcalSemana || 0), objetivoSemanal || 0, 1);
+  const minPeso = pesos.length ? Math.min(...pesos) : 0;
+  const maxPeso = pesos.length ? Math.max(...pesos) : 0;
+  const pesoRange = Math.max(maxPeso - minPeso, 1);
+  const barW = 34, gap = 14, chartH = 130, padTop = 34, padBottom = 20;
+  const chartW = allProgress.length * (barW + gap) + gap;
+  const svgH = padTop + chartH + padBottom;
+  function semColorFor(kcalSemana){
+    if (!objetivoSemanal) return 'var(--ink-soft)';
+    const diff = kcalSemana - objetivoSemanal;
+    const tol = Math.max(300*7*0.4, objetivoSemanal*0.06);
+    if (Math.abs(diff) <= tol) return 'var(--sem-green)';
+    return diff < 0 ? 'var(--sem-orange)' : 'var(--sem-red)';
+  }
+  let barsHtml = '';
+  let pointsPeso = [];
+  allProgress.forEach((p, i) => {
+    const x = gap + i * (barW + gap);
+    const h = (p.kcalSemana||0) / maxKcal * chartH;
+    const y = padTop + chartH - h;
+    const color = semColorFor(p.kcalSemana||0);
+    const monday = parseDateKey(p.key.replace('progress:',''));
+    const label = `${monday.getDate()}/${monday.getMonth()+1}`;
+    barsHtml += `<rect data-week="${p.key.replace('progress:','')}" class="prog-bar" x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="4" style="cursor:pointer;"></rect>`;
+    barsHtml += `<text x="${x + barW/2}" y="${svgH - 4}" text-anchor="middle" font-size="9" fill="var(--ink-soft)">${label}</text>`;
+    if (p.peso != null){
+      const py = padTop + (1 - (p.peso - minPeso) / pesoRange) * (chartH*0.5) - 4;
+      pointsPeso.push({ x: x + barW/2, y: py, peso: p.peso });
+    }
+  });
+  let pesoLineHtml = '';
+  if (pointsPeso.length){
+    const pathD = pointsPeso.map((pt,i) => `${i===0?'M':'L'}${pt.x},${pt.y}`).join(' ');
+    pesoLineHtml = `<path d="${pathD}" fill="none" stroke="var(--mango-dark)" stroke-width="2"></path>`;
+    pesoLineHtml += pointsPeso.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="3" fill="var(--mango-dark)"></circle><text x="${pt.x}" y="${pt.y-6}" text-anchor="middle" font-size="9" fill="var(--mango-dark)" font-weight="700">${pt.peso}</text>`).join('');
+  }
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${chartW} ${svgH}" style="width:100%;height:auto;display:block;">${barsHtml}${pesoLineHtml}</svg>
+    <div class="wr-legend" style="margin-top:8px;">
+      <span><i style="background:var(--sem-green);"></i> En objetivo</span>
+      <span><i style="background:var(--sem-orange);"></i> Déficit</span>
+      <span><i style="background:var(--sem-red);"></i> Superávit</span>
+      <span><i style="background:var(--mango-dark);"></i> Peso (kg)</span>
+    </div>
+    <div id="progWeekDaysWrap"></div>
+  `;
+  wrap.querySelectorAll('.prog-bar').forEach(bar => {
+    bar.addEventListener('click', () => {
+      const wk = bar.dataset.week;
+      progExpandedWeekKey = (progExpandedWeekKey === wk) ? null : wk;
+      renderProgWeekDays(wk, meals, objetivoDiario);
+    });
+  });
+  if (progExpandedWeekKey){ renderProgWeekDays(progExpandedWeekKey, meals, objetivoDiario); }
+}
+
+function renderProgWeekDays(weekKey, meals, objetivoDiario){
+  const daysWrap = document.getElementById('progWeekDaysWrap');
+  if (!daysWrap) return;
+  if (progExpandedWeekKey !== weekKey){ daysWrap.innerHTML = ''; return; }
+  const monday = parseDateKey(weekKey);
+  const days = Array.from({length:7}, (_,i) => addDays(monday,i));
+  function semColorForDay(kcal){
+    if (!objetivoDiario) return 'var(--ink-soft)';
+    const diff = kcal - objetivoDiario;
+    const tol = Math.max(300, objetivoDiario*0.12);
+    if (Math.abs(diff) <= tol) return 'var(--sem-green)';
+    return diff < 0 ? 'var(--sem-orange)' : 'var(--sem-red)';
+  }
+  daysWrap.innerHTML = `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);">
+    ${days.map((d,i) => {
+      const key = dateKey(d);
+      const kcalDia = meals.filter(m => dateKey(new Date(m.timestamp)) === key).reduce((s,m) => s + (m.total_kcal||0), 0);
+      const color = semColorForDay(kcalDia);
+      return `<div class="stat-row"><span>${DIAS_SEMANA[i]} ${d.getDate()}</span><span style="color:${color};font-weight:700;">${Math.round(kcalDia)} kcal</span></div>`;
+    }).join('')}
+  </div>`;
 }
 
 document.getElementById('progPrevWeek').addEventListener('click', () => { progRefDate = addDays(progRefDate,-7); refreshProgreso(); });
