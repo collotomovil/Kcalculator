@@ -162,13 +162,20 @@
   }
   h2.tab-title{
     font-family:var(--font-display);
-    font-size:23px;
+    font-size:22px;
     font-weight:700;
-    margin:0 auto 20px;
+    margin:0 0 18px;
     text-align:center;
-    display:table;
-    padding-bottom:8px;
-    border-bottom:5px solid var(--mango-dark);
+    padding:12px 10px;
+    border-radius:var(--radius-md);
+    background:var(--mango);
+    color:#fff;
+    border:var(--border-w) solid var(--ink);
+    box-shadow:var(--shadow-card);
+  }
+  html[data-style="nube"] h2.tab-title{
+    border:none;
+    background:linear-gradient(135deg, var(--mango), var(--basil));
   }
   .tab-panel[hidden]{display:none;}
   .tab-panel{touch-action:pan-y;}
@@ -341,9 +348,6 @@
     font-family:var(--font-display);font-weight:700;font-size:12.5px;color:var(--ink);cursor:pointer;
     box-shadow:var(--shadow-btn);padding:6px 4px;text-align:center;line-height:1.2;
   }
-  .mode-grid-flat button{
-    aspect-ratio:auto;padding:13px 4px;font-size:14px;
-  }
   .mode-grid button .mg-icon{font-size:28px;line-height:1;}
   .mode-grid button.active{background:var(--mango);color:#fff;}
   html[data-style="nube"] .mode-grid button{border:none;}
@@ -399,6 +403,9 @@
   .picker-row:last-child{border-bottom:none;}
   .disclaimer{margin-top:24px;font-size:12px;line-height:1.5;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:12px;}
   .scroll-box{max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .pill.pill-optional{opacity:.55;}
+  .pill.pill-optional.active{opacity:1;}
+  .wizard-none-warning{font-size:12.5px;color:var(--sem-orange);font-weight:700;margin-top:8px;}
   #previewWrap{position:relative;}
   .save-success-overlay{
     position:absolute;top:0;left:0;width:100%;height:100%;
@@ -417,9 +424,6 @@
   .wizard-steps-nav button{flex:1;}
   .ingredient-detail-row{cursor:pointer;}
   .ingredient-detail-row:active{opacity:.7;}
-  .pill.pill-optional{opacity:.55;}
-  .pill.pill-optional.active{opacity:1;}
-  .wizard-none-warning{font-size:12.5px;color:var(--sem-orange);font-weight:700;margin-top:8px;}
   /* --- cuadricula de ingredientes propios en Calculadora --- */
   .own-ing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
   .own-ing-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--paper);border:var(--border-w) solid var(--ink);border-radius:var(--radius-md);padding:8px 4px;cursor:pointer;text-align:center;}
@@ -543,7 +547,7 @@
   <!-- ===================== MI DIARIO ===================== -->
   <div id="tab-diario" class="tab-panel" hidden>
     <h2 class="tab-title">Mi diario</h2>
-    <div class="mode-grid mode-grid-flat" id="diarioViewToggle">
+    <div class="mode-grid" id="diarioViewToggle">
       <button class="active" data-view="dia"><span class="mg-icon">📅</span><span>Día</span></button>
       <button data-view="semana"><span class="mg-icon">📊</span><span>Semana</span></button>
       <button data-view="mes"><span class="mg-icon">🗓️</span><span>Mes</span></button>
@@ -676,7 +680,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.3<br>
+    Versión 1.4<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1582,11 +1586,13 @@ async function finishWizardAndSave(){
   triggerSaveSuccessOverlay(true);
 }
 
+
 function triggerSaveSuccessOverlay(guardado){
   const overlay = document.getElementById('saveSuccessOverlay');
-  const mensaje = guardado ? '✓ Guardado correctamente' : 'Cerrado sin guardar';
+  const mensaje = (guardado === false) ? 'Cerrado sin guardar' : '✓ Guardado correctamente';
   if (overlay){
-    overlay.querySelector('span').textContent = mensaje;
+    const span = overlay.querySelector('span');
+    if (span) span.textContent = mensaje;
     overlay.hidden = false;
     overlay.classList.add('show');
     setTimeout(() => {
