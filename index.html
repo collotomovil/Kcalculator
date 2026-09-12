@@ -164,7 +164,11 @@
     font-family:var(--font-display);
     font-size:23px;
     font-weight:700;
-    margin:0 0 16px;
+    margin:0 auto 20px;
+    text-align:center;
+    display:table;
+    padding-bottom:8px;
+    border-bottom:5px solid var(--mango-dark);
   }
   .tab-panel[hidden]{display:none;}
   .tab-panel{touch-action:pan-y;}
@@ -340,7 +344,6 @@
   .mode-grid-flat button{
     aspect-ratio:auto;padding:13px 4px;font-size:14px;
   }
-  .mode-grid-flat button .mg-icon{font-size:20px;}
   .mode-grid button .mg-icon{font-size:28px;line-height:1;}
   .mode-grid button.active{background:var(--mango);color:#fff;}
   html[data-style="nube"] .mode-grid button{border:none;}
@@ -414,6 +417,9 @@
   .wizard-steps-nav button{flex:1;}
   .ingredient-detail-row{cursor:pointer;}
   .ingredient-detail-row:active{opacity:.7;}
+  .pill.pill-optional{opacity:.55;}
+  .pill.pill-optional.active{opacity:1;}
+  .wizard-none-warning{font-size:12.5px;color:var(--sem-orange);font-weight:700;margin-top:8px;}
   /* --- cuadricula de ingredientes propios en Calculadora --- */
   .own-ing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
   .own-ing-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--paper);border:var(--border-w) solid var(--ink);border-radius:var(--radius-md);padding:8px 4px;cursor:pointer;text-align:center;}
@@ -472,6 +478,7 @@
 
   <!-- ===================== CALCULADORA ===================== -->
   <div id="tab-calculadora" class="tab-panel">
+    <h2 class="tab-title">Calculadora</h2>
     <div class="pending-banner" id="pendingEntryBanner" hidden></div>
     <label style="display:block;font-family:var(--font-display);font-size:18px;margin-bottom:8px;">¿Qué vas a comer ahora?</label>
     <div class="mode-grid" id="calcModeToggle">
@@ -1264,7 +1271,7 @@ function resetCaptureUI(){
 
 let wizardMealName = '';
 let wizardSlot = null;
-let wizardDestino = 'plato';
+let wizardDestino = null;
 analyzeBtn.addEventListener('click', analyzeEverything);
 
 function applyAnalysisResult(parsed, source){
@@ -1449,56 +1456,66 @@ function openIngredientDetailModal(idx){
 
 function openWizardStep3(direction){
   wizardMealName = wizardMealName || defaultDishName(manualItems.map(i => ({nombre:i.nombre})));
-  const defaultSlot = wizardSlot || pendingEntrySlot || guessSlot();
-  openModal(`
-    <div class="modal-head"><h3>Guardar plato</h3><button class="modal-close" id="w3Close">✕</button></div>
-    <div class="field"><label>Nombre del plato</label><input type="text" id="w3Nombre" value="${escapeHtml(wizardMealName)}"></div>
-    <div class="field">
-      <label>¿Para qué comida es?</label>
-      <div class="pill-group" id="w3SlotPills">
-        ${Object.entries(SLOT_LABELS).map(([key,label]) => `<button type="button" class="pill ${key===defaultSlot?'active':''}" data-slot="${key}">${label}</button>`).join('')}
+
+  function render(){
+    openModal(`
+      <div class="modal-head"><h3>Guardar plato</h3><button class="modal-close" id="w3Close">✕</button></div>
+      <div class="field"><label>Nombre del plato</label><input type="text" id="w3Nombre" value="${escapeHtml(wizardMealName)}"></div>
+      <div class="field">
+        <label>¿Para qué comida es? (opcional — toca de nuevo para quitar la selección)</label>
+        <div class="pill-group" id="w3SlotPills">
+          ${Object.entries(SLOT_LABELS).map(([key,label]) => `<button type="button" class="pill pill-optional ${key===wizardSlot?'active':''}" data-slot="${key}">${label}</button>`).join('')}
+        </div>
       </div>
-    </div>
-    <div class="field">
-      <label>Guardar como</label>
-      <div class="pill-group" id="w3DestinoPills">
-        <button type="button" class="pill ${wizardDestino==='plato'?'active':''}" data-destino="plato">Mis platos</button>
-        <button type="button" class="pill ${wizardDestino==='producto'?'active':''}" data-destino="producto">Mis productos</button>
+      <div class="field">
+        <label>Guardar como (opcional — toca de nuevo para quitar la selección)</label>
+        <div class="pill-group" id="w3DestinoPills">
+          <button type="button" class="pill pill-optional ${wizardDestino==='plato'?'active':''}" data-destino="plato">Mis platos</button>
+          <button type="button" class="pill pill-optional ${wizardDestino==='producto'?'active':''}" data-destino="producto">Mis productos</button>
+        </div>
       </div>
-    </div>
-    <div class="wizard-steps-nav">
-      <button class="ghost" id="w3BackBtn">Atrás</button>
-      <button class="primary" id="w3FinishBtn">Finalizar</button>
-    </div>
-    <div id="w3Status"></div>
-  `);
+      ${(!wizardSlot && !wizardDestino) ? `<p class="wizard-none-warning">⚠️ No has seleccionado nada — al finalizar no se guardará en ningún sitio.</p>` : ''}
+      <div class="wizard-steps-nav">
+        <button class="ghost" id="w3BackBtn">Atrás</button>
+        <button class="primary" id="w3FinishBtn">Finalizar</button>
+      </div>
+      <div id="w3Status"></div>
+    `);
+    document.getElementById('w3Close').addEventListener('click', closeModal);
+    document.getElementById('w3Nombre').addEventListener('input', (e) => { wizardMealName = e.target.value; });
+    document.querySelectorAll('#w3SlotPills .pill').forEach(p => {
+      p.addEventListener('click', () => {
+        wizardSlot = (wizardSlot === p.dataset.slot) ? null : p.dataset.slot;
+        render();
+      });
+    });
+    document.querySelectorAll('#w3DestinoPills .pill').forEach(p => {
+      p.addEventListener('click', () => {
+        wizardDestino = (wizardDestino === p.dataset.destino) ? null : p.dataset.destino;
+        render();
+      });
+    });
+    document.getElementById('w3BackBtn').addEventListener('click', () => openWizardStep2('prev'));
+    document.getElementById('w3FinishBtn').addEventListener('click', finishWizardAndSave);
+  }
+  render();
   animateWizardStep(direction);
-  document.getElementById('w3Close').addEventListener('click', closeModal);
-  document.getElementById('w3Nombre').addEventListener('input', (e) => { wizardMealName = e.target.value; });
-  document.querySelectorAll('#w3SlotPills .pill').forEach(p => {
-    p.addEventListener('click', () => {
-      document.querySelectorAll('#w3SlotPills .pill').forEach(x => x.classList.remove('active'));
-      p.classList.add('active');
-      wizardSlot = p.dataset.slot;
-    });
-  });
-  document.querySelectorAll('#w3DestinoPills .pill').forEach(p => {
-    p.addEventListener('click', () => {
-      document.querySelectorAll('#w3DestinoPills .pill').forEach(x => x.classList.remove('active'));
-      p.classList.add('active');
-      wizardDestino = p.dataset.destino;
-    });
-  });
-  document.getElementById('w3BackBtn').addEventListener('click', () => openWizardStep2('prev'));
-  document.getElementById('w3FinishBtn').addEventListener('click', finishWizardAndSave);
 }
 
 async function finishWizardAndSave(){
   const btn = document.getElementById('w3FinishBtn');
   const statusEl = document.getElementById('w3Status');
+
+  if (!wizardSlot && !wizardDestino){
+    const ok = await confirmModal('No has elegido ni franja ni dónde guardarlo, así que no se guardará nada. ¿Cerrar de todas formas?');
+    if (!ok) return;
+    closeModal();
+    triggerSaveSuccessOverlay(false);
+    return;
+  }
+
   btn.disabled = true;
   const nombreFinal = (document.getElementById('w3Nombre').value || '').trim() || wizardMealName || defaultDishName(manualItems.map(i => ({nombre:i.nombre})));
-  const slotFinal = wizardSlot || pendingEntrySlot || guessSlot();
 
   if (wizardDestino === 'producto'){
     for (const item of manualItems){
@@ -1511,64 +1528,65 @@ async function finishWizardAndSave(){
         foto: item.foto || '', codigo_barras: null, fuente: 'wizard_foto', fecha: id
       });
     }
-    closeModal();
-    triggerSaveSuccessOverlay();
-    return;
   }
 
-  learnFromCorrection();
-  let fotoFinal = '';
-  try{
-    if (currentBase64 && preview.src) fotoFinal = await makeThumbnail(preview.src, 220);
-  }catch(err){ console.error('thumbnail', err); }
+  if (wizardSlot){
+    learnFromCorrection();
+    let fotoFinal = '';
+    try{
+      if (currentBase64 && preview.src) fotoFinal = await makeThumbnail(preview.src, 220);
+    }catch(err){ console.error('thumbnail', err); }
 
-  const entry = {
-    timestamp: (() => {
-      if (!pendingEntryDate) return Date.now();
-      const d = parseDateKey(pendingEntryDate);
-      const now = new Date();
-      d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-      return d.getTime();
-    })(),
-    slot: slotFinal,
-    nombre: nombreFinal,
-    foto: fotoFinal,
-    alimentos: manualItems.map(i => ({
-      nombre: i.nombre,
-      cantidad_estimada: `${Math.round(i.gramos)} g`,
-      kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
-    })),
-    total_kcal: Math.round(manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0)),
-    total_proteinas_g: Math.round(manualItems.reduce((s,i) => s + (i.proteinas_100g * i.gramos / 100), 0)),
-    total_carbohidratos_g: Math.round(manualItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0)),
-    total_grasas_g: Math.round(manualItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0)),
-    total_fibra_g: Math.round(manualItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0)),
-    vitaminas_destacadas: analysisMeta.vitaminas_destacadas || [],
-    confianza: analysisMeta.confianza || null,
-    notas: analysisMeta.notas || ''
-  };
+    const entry = {
+      timestamp: (() => {
+        if (!pendingEntryDate) return Date.now();
+        const d = parseDateKey(pendingEntryDate);
+        const now = new Date();
+        d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+        return d.getTime();
+      })(),
+      slot: wizardSlot,
+      nombre: nombreFinal,
+      foto: fotoFinal,
+      alimentos: manualItems.map(i => ({
+        nombre: i.nombre,
+        cantidad_estimada: `${Math.round(i.gramos)} g`,
+        kcal_estimadas: Math.round(i.kcal_100g * i.gramos / 100)
+      })),
+      total_kcal: Math.round(manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0)),
+      total_proteinas_g: Math.round(manualItems.reduce((s,i) => s + (i.proteinas_100g * i.gramos / 100), 0)),
+      total_carbohidratos_g: Math.round(manualItems.reduce((s,i) => s + (i.carbohidratos_100g * i.gramos / 100), 0)),
+      total_grasas_g: Math.round(manualItems.reduce((s,i) => s + (i.grasas_100g * i.gramos / 100), 0)),
+      total_fibra_g: Math.round(manualItems.reduce((s,i) => s + (i.fibra_100g * i.gramos / 100), 0)),
+      vitaminas_destacadas: analysisMeta.vitaminas_destacadas || [],
+      confianza: analysisMeta.confianza || null,
+      notas: analysisMeta.notas || ''
+    };
 
-  let saveOk = await storageSet(`meals:${entry.timestamp}`, entry);
-  if (!saveOk && entry.foto){
-    const entrySinFoto = { ...entry, foto: '' };
-    saveOk = await storageSet(`meals:${entry.timestamp}`, entrySinFoto);
+    let saveOk = await storageSet(`meals:${entry.timestamp}`, entry);
+    if (!saveOk && entry.foto){
+      const entrySinFoto = { ...entry, foto: '' };
+      saveOk = await storageSet(`meals:${entry.timestamp}`, entrySinFoto);
+    }
+    if (!saveOk){
+      btn.disabled = false;
+      statusEl.innerHTML = `<div class="error">No se pudo guardar — el almacenamiento podría estar lleno. Prueba a borrar algún plato antiguo con foto en "Mis platos".</div>`;
+      return;
+    }
+    pendingEntryDate = null;
+    pendingEntrySlot = null;
+    renderPendingBanner();
   }
-  if (!saveOk){
-    btn.disabled = false;
-    statusEl.innerHTML = `<div class="error">No se pudo guardar — el almacenamiento podría estar lleno. Prueba a borrar algún plato antiguo con foto en "Mis platos".</div>`;
-    return;
-  }
 
-  pendingEntryDate = null;
-  pendingEntrySlot = null;
-  renderPendingBanner();
   closeModal();
-  triggerSaveSuccessOverlay();
+  triggerSaveSuccessOverlay(true);
 }
 
-function triggerSaveSuccessOverlay(){
+function triggerSaveSuccessOverlay(guardado){
   const overlay = document.getElementById('saveSuccessOverlay');
+  const mensaje = guardado ? '✓ Guardado correctamente' : 'Cerrado sin guardar';
   if (overlay){
+    overlay.querySelector('span').textContent = mensaje;
     overlay.hidden = false;
     overlay.classList.add('show');
     setTimeout(() => {
@@ -1592,7 +1610,7 @@ function resetWizardState(){
   lastAnalysisGramosOriginal = 0;
   wizardMealName = '';
   wizardSlot = null;
-  wizardDestino = 'plato';
+  wizardDestino = null;
 }
 
 async function buildIngredientsContext(){
