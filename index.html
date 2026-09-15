@@ -688,7 +688,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.7<br>
+    Versión 1.8<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1284,6 +1284,7 @@ function resetCaptureUI(){
 let wizardMealName = '';
 let wizardSlot = null;
 let wizardDestino = null;
+let wizardSlotTouched = false;
 analyzeBtn.addEventListener('click', analyzeEverything);
 
 function applyAnalysisResult(parsed, source){
@@ -1468,6 +1469,9 @@ function openIngredientDetailModal(idx){
 
 function openWizardStep3(direction){
   wizardMealName = wizardMealName || defaultDishName(manualItems.map(i => ({nombre:i.nombre})));
+  if (!wizardSlotTouched && !wizardSlot){
+    wizardSlot = pendingEntrySlot || guessSlot();
+  }
 
   function render(){
     openModal(`
@@ -1497,6 +1501,7 @@ function openWizardStep3(direction){
     document.getElementById('w3Nombre').addEventListener('input', (e) => { wizardMealName = e.target.value; });
     document.querySelectorAll('#w3SlotPills .pill').forEach(p => {
       p.addEventListener('click', () => {
+        wizardSlotTouched = true;
         wizardSlot = (wizardSlot === p.dataset.slot) ? null : p.dataset.slot;
         render();
       });
@@ -1520,7 +1525,10 @@ async function finishWizardAndSave(){
 
   if (!wizardSlot && !wizardDestino){
     const ok = await confirmModal('No has elegido ni franja ni dónde guardarlo, así que no se guardará nada. ¿Cerrar de todas formas?');
-    if (!ok) return;
+    if (!ok){
+      openWizardStep3('prev');
+      return;
+    }
     closeModal();
     triggerSaveSuccessOverlay(false);
     return;
@@ -1625,6 +1633,7 @@ function resetWizardState(){
   wizardMealName = '';
   wizardSlot = null;
   wizardDestino = null;
+  wizardSlotTouched = false;
 }
 
 async function buildIngredientsContext(){
