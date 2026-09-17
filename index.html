@@ -527,6 +527,7 @@
 
     <div class="card" id="repeatCard" hidden>
       <div class="field"><label>Buscar en tus platos guardados</label><input type="text" id="repeatSearchInput" placeholder="Ej. arroz con pollo…"></div>
+      <div class="field"><label>Ordenar por</label><select id="repeatSort"><option value="fecha">Más recientes</option><option value="alfabetico">Alfabético</option><option value="repetido">Más repetidos</option></select></div>
       <div id="repeatList" class="scroll-box"></div>
     </div>
 
@@ -622,6 +623,7 @@
       </div>
     </div>
 
+    <div class="field"><label>Ordenar productos por</label><select id="ingredientesSort"><option value="fecha">Más recientes</option><option value="alfabetico">Alfabético</option><option value="repetido">Más usados</option></select></div>
     <div class="card scroll-box" id="ingredientesList"></div>
   </div>
 
@@ -688,7 +690,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.8<br>
+    Versión 1.9<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1380,15 +1382,16 @@ function openWizardStep1(){
   openModal(`
     <div class="modal-head"><h3>Revisa los pesos</h3><button class="modal-close" id="wrClose">✕</button></div>
     ${fotoPreview ? `<img src="${fotoPreview}" style="width:100%;max-height:160px;object-fit:cover;border-radius:var(--radius-md);border:var(--border-w) solid var(--ink);margin-bottom:12px;" alt="">` : ''}
-    <p class="notes" style="margin:0 0 10px;">Ajusta el peso de cada ingrediente si no coincide con lo que ves.</p>
+    <p class="notes" style="margin:0 0 10px;">Ajusta el peso o borra cualquier ingrediente que la IA haya añadido por error.</p>
     <div id="wrList">
-      ${manualItems.map((i, idx) => `
+      ${manualItems.length ? manualItems.map((i, idx) => `
         <div class="field-row" style="align-items:flex-end;">
           <div class="field" style="flex:2;"><label>${escapeHtml(i.nombre)}</label></div>
           <div class="field" style="flex:1;"><label>Gramos</label><input type="number" data-idx="${idx}" class="wr-gramos-input" value="${i.gramos}" inputmode="decimal"></div>
-        </div>`).join('')}
+          <button class="lr-del wr-delete" data-idx="${idx}" type="button" title="Quitar ingrediente">✕</button>
+        </div>`).join('') : `<div class="empty-state">No quedan ingredientes. Vuelve a hacer la foto o ciérralo.</div>`}
     </div>
-    <button class="primary" id="wrNextBtn" style="margin-top:10px;">Siguiente</button>
+    <button class="primary" id="wrNextBtn" style="margin-top:10px;" ${manualItems.length ? '' : 'disabled'}>Siguiente</button>
   `);
   document.getElementById('wrClose').addEventListener('click', closeModal);
   document.querySelectorAll('.wr-gramos-input').forEach(inp => {
@@ -1397,8 +1400,11 @@ function openWizardStep1(){
       manualItems[idx].gramos = parseFloat(inp.value) || 0;
     });
   });
+  document.querySelectorAll('.wr-delete').forEach(btn => {
+    btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx), 1); openWizardStep1(); });
+  });
   document.getElementById('wrNextBtn').addEventListener('click', () => {
-    openWizardStep2('next');
+    if (manualItems.length) openWizardStep2('next');
   });
 }
 
@@ -1406,21 +1412,24 @@ function openWizardStep2(direction){
   const totalKcal = manualItems.reduce((s,i) => s + (i.kcal_100g * i.gramos / 100), 0);
   openModal(`
     <div class="modal-head"><h3>Desglose por ingrediente</h3><button class="modal-close" id="w2Close">✕</button></div>
-    <p class="notes" style="margin:0 0 10px;">Toca un ingrediente para ver o corregir su información nutricional detallada.</p>
+    <p class="notes" style="margin:0 0 10px;">Toca un ingrediente para ver o corregir sus datos. Usa ✕ si la IA ha añadido algo que no está.</p>
     <div id="w2List">
-      ${manualItems.map((i, idx) => `
-        <div class="food-row ingredient-detail-row" data-idx="${idx}">
-          <div>
+      ${manualItems.length ? manualItems.map((i, idx) => `
+        <div class="food-row">
+          <div class="ingredient-detail-row" data-idx="${idx}" style="flex:1;min-width:0;">
             <div class="food-name">${escapeHtml(i.nombre)} <span style="opacity:.5;">ℹ️</span></div>
             <div class="food-meta">${i.gramos} g</div>
           </div>
-          <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
-        </div>`).join('')}
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="food-kcal">${Math.round(i.kcal_100g * i.gramos / 100)} kcal</span>
+            <button class="lr-del w2-delete" data-idx="${idx}" type="button" title="Quitar ingrediente">✕</button>
+          </div>
+        </div>`).join('') : `<div class="empty-state">No quedan ingredientes. Pulsa Atrás para revisar la detección.</div>`}
     </div>
     <div class="total-row" style="margin-top:8px;"><span class="lbl">Total</span><span class="val">${Math.round(totalKcal)} kcal</span></div>
     <div class="wizard-steps-nav">
       <button class="ghost" id="w2BackBtn">Atrás</button>
-      <button class="primary" id="w2NextBtn">Siguiente</button>
+      <button class="primary" id="w2NextBtn" ${manualItems.length ? '' : 'disabled'}>Siguiente</button>
     </div>
   `);
   animateWizardStep(direction);
@@ -1428,8 +1437,11 @@ function openWizardStep2(direction){
   document.querySelectorAll('.ingredient-detail-row').forEach(row => {
     row.addEventListener('click', () => openIngredientDetailModal(parseInt(row.dataset.idx)));
   });
+  document.querySelectorAll('.w2-delete').forEach(btn => {
+    btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx), 1); openWizardStep2(null); });
+  });
   document.getElementById('w2BackBtn').addEventListener('click', () => { openWizardStep1(); animateWizardStep('prev'); });
-  document.getElementById('w2NextBtn').addEventListener('click', () => openWizardStep3('next'));
+  document.getElementById('w2NextBtn').addEventListener('click', () => { if (manualItems.length) openWizardStep3('next'); });
 }
 
 function openIngredientDetailModal(idx){
@@ -1519,18 +1531,28 @@ function openWizardStep3(direction){
   animateWizardStep(direction);
 }
 
+function openNoSaveWarning(){
+  openModal(`
+    <div class="modal-head"><h3>Sin destino seleccionado</h3><button class="modal-close" id="nsClose">✕</button></div>
+    <p class="notes" style="margin-bottom:16px;">No has elegido ni franja ni dónde guardarlo. Si continúas, se cerrará sin guardar nada.</p>
+    <button class="primary" id="nsContinue">Continuar sin guardar</button>
+    <button class="ghost" id="nsBack" style="margin-top:8px;">Volver</button>
+  `);
+  const volver = () => openWizardStep3('prev');
+  document.getElementById('nsClose').addEventListener('click', volver);
+  document.getElementById('nsBack').addEventListener('click', volver);
+  document.getElementById('nsContinue').addEventListener('click', () => {
+    closeModal();
+    triggerSaveSuccessOverlay(false);
+  });
+}
+
 async function finishWizardAndSave(){
   const btn = document.getElementById('w3FinishBtn');
   const statusEl = document.getElementById('w3Status');
 
   if (!wizardSlot && !wizardDestino){
-    const ok = await confirmModal('No has elegido ni franja ni dónde guardarlo, así que no se guardará nada. ¿Cerrar de todas formas?');
-    if (!ok){
-      openWizardStep3('prev');
-      return;
-    }
-    closeModal();
-    triggerSaveSuccessOverlay(false);
+    openNoSaveWarning();
     return;
   }
 
@@ -1729,6 +1751,7 @@ calcModeToggle.addEventListener('click', (e) => {
 });
 
 document.getElementById('repeatSearchInput').addEventListener('input', renderRepeatList);
+document.getElementById('repeatSort').addEventListener('change', renderRepeatList);
 
 function parseGramsFromText(text){
   const m = String(text || '').match(/[\d.,]+/);
@@ -1860,10 +1883,22 @@ function openEditMealIngredientsModal(mealKey){
 
 async function renderRepeatList(){
   const query = document.getElementById('repeatSearchInput').value.trim().toLowerCase();
+  const sort = document.getElementById('repeatSort').value;
   const meals = await loadAllMeals();
-  const seen = new Set();
-  const unique = meals.filter(m => { if (seen.has(m.nombre)) return false; seen.add(m.nombre); return true; });
-  const filtered = query ? unique.filter(m => m.nombre.toLowerCase().includes(query)) : unique.slice(0, 30);
+  const byName = new Map();
+  meals.forEach(m => {
+    const key = (m.nombre || '').trim().toLowerCase();
+    if (!byName.has(key)) byName.set(key, { ...m, repeticiones: 0 });
+    const group = byName.get(key);
+    group.repeticiones++;
+    if ((m.timestamp||0) > (group.timestamp||0)) Object.assign(group, m);
+  });
+  let unique = Array.from(byName.values());
+  if (query) unique = unique.filter(m => (m.nombre||'').toLowerCase().includes(query));
+  if (sort === 'alfabetico') unique.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
+  else if (sort === 'repetido') unique.sort((a,b) => b.repeticiones-a.repeticiones || b.timestamp-a.timestamp);
+  else unique.sort((a,b) => b.timestamp-a.timestamp);
+  const filtered = query ? unique : unique.slice(0, 30);
   const listEl = document.getElementById('repeatList');
   if (!filtered.length){
     listEl.innerHTML = `<div class="empty-state">${query ? 'Sin resultados.' : 'Aún no tienes platos guardados.'}</div>`;
@@ -1875,7 +1910,7 @@ async function renderRepeatList(){
         ${thumbOrPlaceholder(m.foto, '🍽️')}
         <div class="lr-info">
           <div class="lr-title">${escapeHtml(m.nombre)}</div>
-          <div class="lr-sub">${m.total_kcal} kcal</div>
+          <div class="lr-sub">${m.total_kcal} kcal · ${m.repeticiones} vez${m.repeticiones===1?'':'es'}</div>
         </div>
       </div>
     </div>`).join('');
@@ -1885,8 +1920,9 @@ async function renderRepeatList(){
       manualItems = mealToManualItems(meal);
       analysisMeta = { vitaminas_destacadas: meal.vitaminas_destacadas || [], confianza: meal.confianza || null, notas: 'Repetido desde un plato guardado — revisa las cantidades por si hoy han sido distintas.' };
       repeatedMealFoto = meal.foto || '';
-      lastAnalysisSource = null;
-      renderManualItemsList();
+      lastAnalysisSource = 'repetir';
+      lastAnalysisGramosOriginal = manualItems.reduce((s,i) => s+i.gramos,0);
+      openWizardStep1();
     });
   });
 }
@@ -2878,6 +2914,7 @@ async function openEditMealModal(mealKey){
 const ingredientesListEl = document.getElementById('ingredientesList');
 const toggleIngForm = document.getElementById('toggleIngForm');
 const ingFormWrap = document.getElementById('ingFormWrap');
+document.getElementById('ingredientesSort').addEventListener('change', refreshIngredientes);
 toggleIngForm.addEventListener('click', () => {
   ingFormWrap.hidden = !ingFormWrap.hidden;
   toggleIngForm.textContent = ingFormWrap.hidden ? '+ Añadir ingrediente' : '– Ocultar formulario';
@@ -3053,8 +3090,20 @@ function thumbOrPlaceholder(foto, emoji){
 
 async function refreshIngredientes(){
   const list = await loadAllIngredients();
+  const sortEl = document.getElementById('ingredientesSort');
+  const sort = sortEl ? sortEl.value : 'alfabetico';
+  const meals = await loadAllMeals();
+  const usage = {};
+  meals.forEach(m => (m.alimentos||[]).forEach(a => {
+    const name = (a.nombre||'').trim().toLowerCase();
+    if (name) usage[name] = (usage[name]||0) + 1;
+  }));
+  list.forEach(i => { i._uses = usage[(i.nombre||'').trim().toLowerCase()] || 0; });
+  if (sort === 'fecha') list.sort((a,b) => (b.fecha||b.id||0)-(a.fecha||a.id||0));
+  else if (sort === 'repetido') list.sort((a,b) => b._uses-a._uses || (a.nombre||'').localeCompare(b.nombre||'', 'es'));
+  else list.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
   if (!list.length){
-    ingredientesListEl.innerHTML = `<div class="empty-state">Todavía no has añadido ingredientes.</div>`;
+    ingredientesListEl.innerHTML = `<div class="empty-state">Todavía no has añadido productos.</div>`;
     return;
   }
   ingredientesListEl.innerHTML = list.map(i => {
@@ -3065,7 +3114,7 @@ async function refreshIngredientes(){
         ${thumbOrPlaceholder(i.foto, '🥗')}
         <div class="lr-info">
           <div class="lr-title">${escapeHtml(i.nombre)}${i.marca ? ' · ' + escapeHtml(i.marca) : ''}</div>
-          <div class="lr-sub">P ${i.proteinas_100g}g · C ${i.carbohidratos_100g}g · G ${i.grasas_100g}g /100g ${i.codigo_barras ? '· 🏷️' : ''}</div>
+          <div class="lr-sub">P ${i.proteinas_100g}g · C ${i.carbohidratos_100g}g · G ${i.grasas_100g}g /100g · ${i._uses} uso${i._uses===1?'':'s'}</div>
         </div>
       </div>
       <div class="lr-right">
@@ -3079,7 +3128,7 @@ async function refreshIngredientes(){
     el.addEventListener('click', async (e) => {
       e.stopPropagation();
       const key = el.closest('.list-row').dataset.key;
-      const ok = await confirmModal('¿Seguro que quieres borrar este ingrediente?');
+      const ok = await confirmModal('¿Seguro que quieres borrar este producto?');
       if (!ok) return;
       await storageDelete(key);
       refreshIngredientes();
@@ -3093,6 +3142,7 @@ async function refreshIngredientes(){
     });
   });
 }
+
 
 function openIngredientModal(i){
   const sem = calcSemaforo(i);
