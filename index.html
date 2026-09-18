@@ -433,6 +433,7 @@
   .wizard-steps-nav button{flex:1;}
   .ingredient-detail-row{cursor:pointer;}
   .ingredient-detail-row:active{opacity:.7;}
+  .wr-delete{align-self:flex-end;margin-bottom:9px;flex-shrink:0;}
   /* --- cuadricula de ingredientes propios en Calculadora --- */
   .own-ing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
   .own-ing-card{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--paper);border:var(--border-w) solid var(--ink);border-radius:var(--radius-md);padding:8px 4px;cursor:pointer;text-align:center;}
@@ -690,7 +691,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 1.9<br>
+    Versión 2.0<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1910,7 +1911,7 @@ async function renderRepeatList(){
         ${thumbOrPlaceholder(m.foto, '🍽️')}
         <div class="lr-info">
           <div class="lr-title">${escapeHtml(m.nombre)}</div>
-          <div class="lr-sub">${m.total_kcal} kcal · ${m.repeticiones} vez${m.repeticiones===1?'':'es'}</div>
+          <div class="lr-sub">${m.total_kcal} kcal · ${m.repeticiones===1 ? '1 vez' : m.repeticiones+' veces'}</div>
         </div>
       </div>
     </div>`).join('');
@@ -2277,6 +2278,12 @@ function renderGoalRow(label, value, target, unit, bySlot, toleranciaAbs){
   </div>`;
 }
 
+const MAIN_MEAL_SLOTS = ['desayuno','comida','cena'];
+function mainMealCoverage(dayMeals){
+  const registered = MAIN_MEAL_SLOTS.filter(slot => dayMeals.some(m => m.slot === slot)).length;
+  return registered / MAIN_MEAL_SLOTS.length;
+}
+
 function renderDiaView(meals, goals, exercises, stepsToday){
   const key = dateKey(diarioRefDate);
   const dayMeals = meals.filter(m => dateKey(new Date(m.timestamp)) === key);
@@ -2373,13 +2380,20 @@ function renderDiaView(meals, goals, exercises, stepsToday){
         <p class="goal-empty">Configura tus datos en <a data-action="goto-datos">Mis datos</a> para ver aquí tu progreso frente al objetivo diario.</p>
       </div>
     `}
-    ${goals ? renderValoracion(
-      { kcal: netKcal, prot: totals.prot, carb: totals.carb, grasa: totals.grasa, fibra: totals.fibra },
-      isToday ? { kcal: goals.kcal*dayProgressFraction(), prot_g: goals.prot_g*dayProgressFraction(), carb_g: goals.carb_g*dayProgressFraction(), grasa_g: goals.grasa_g*dayProgressFraction(), fibra_g: goals.fibra_g*dayProgressFraction() } : goals,
-      'día',
-      isToday,
-      goals.objetivo
-    ) : ''}
+    ${(() => {
+      const cobertura = mainMealCoverage(dayMeals);
+      const goalsRegistrados = goals && cobertura > 0 ? {
+        kcal: goals.kcal*cobertura, prot_g: goals.prot_g*cobertura,
+        carb_g: goals.carb_g*cobertura, grasa_g: goals.grasa_g*cobertura, fibra_g: goals.fibra_g*cobertura
+      } : null;
+      return goalsRegistrados ? renderValoracion(
+        { kcal: netKcal, prot: totals.prot, carb: totals.carb, grasa: totals.grasa, fibra: totals.fibra },
+        goalsRegistrados,
+        'día',
+        isToday || cobertura < 1,
+        goals.objetivo
+      ) : '';
+    })()}
   `;
   document.getElementById('dPrev').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,-1); refreshDiario(); });
   document.getElementById('dNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,1); refreshDiario(); });
@@ -2497,6 +2511,18 @@ const NIVEL_EXPLICACION = {
     alto: 'Un exceso puntual de fibra rara vez es un problema, como mucho puede dar algo de hinchazón.'
   }
 };
+function evaluateKcalForGoal(consumido, objetivo, objetivoUsuario, tolerancia){
+  const ev = evaluateMetric(consumido, objetivo, tolerancia);
+  if (!ev || objetivoUsuario !== 'perder' || consumido >= objetivo) return ev;
+  const ratio = consumido / objetivo;
+  // En un plan de pérdida, un déficit adicional moderado no es negativo.
+  // Solo avisamos cuando la ingesta baja de un 60% del objetivo ya ajustado.
+  if (ratio >= 0.60){
+    return { ratio, estado:'bien', color:'var(--sem-green)', deficitAdicional:true };
+  }
+  return ev;
+}
+
 function renderValoracion(totals, goalsEsperado, periodo, enCurso, objetivoUsuario){
   if (!goalsEsperado) return '';
   const kcalTolBase = Math.max(300, (goalsEsperado.kcal || 0) * 0.12);
@@ -2511,7 +2537,10 @@ function renderValoracion(totals, goalsEsperado, periodo, enCurso, objetivoUsuar
     { key:'carb', label:'Carbohidratos', val: totals.carb, obj: goalsEsperado.carb_g, tol: macroTol(goalsEsperado.carb_g) },
     { key:'grasa', label:'Grasas', val: totals.grasa, obj: goalsEsperado.grasa_g, tol: macroTol(goalsEsperado.grasa_g) },
     { key:'fibra', label:'Fibra', val: totals.fibra, obj: goalsEsperado.fibra_g, tol: macroTol(goalsEsperado.fibra_g) }
-  ].map(m => ({ ...m, ev: evaluateMetric(m.val, m.obj, m.tol) })).filter(m => m.ev);
+  ].map(m => ({ ...m, ev: m.key === 'kcal'
+    ? evaluateKcalForGoal(m.val, m.obj, objetivoUsuario, m.tol)
+    : evaluateMetric(m.val, m.obj, m.tol)
+  })).filter(m => m.ev);
 
   if (!metrics.length) return '';
 
