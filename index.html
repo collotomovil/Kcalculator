@@ -311,14 +311,18 @@
   .goal-row .gr-top .gr-label{color:var(--ink-soft);text-transform:uppercase;font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.03em;}
   .goal-row .gr-top .gr-val{font-family:ui-monospace,monospace;}
   .goal-row .gr-bar{position:relative;height:22px;background:var(--line);border-radius:6px;overflow:hidden;}
-  .goal-row .gr-bar-fill{height:100%;background:var(--sem-green);transition:width .3s;}
-  .goal-row .gr-bar-fill.over{background:var(--danger);}
-  .goal-row .gr-bar-extra{position:absolute;top:0;left:0;height:100%;background:var(--ink-soft);opacity:.55;}
-  .goal-row .gr-mark{position:absolute;top:0;bottom:0;width:1px;background:rgba(0,0,0,.25);z-index:2;}
-  html[data-theme="dark"] .goal-row .gr-mark{background:rgba(255,255,255,.3);}
-  .goal-row .gr-slot-label{position:absolute;top:0;height:100%;display:flex;align-items:center;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--paper);text-shadow:0 1px 1px rgba(0,0,0,.35);pointer-events:none;padding-left:3px;white-space:nowrap;overflow:hidden;z-index:1;}
+  .goal-row .gr-segment{position:absolute;top:0;height:100%;transition:left .3s,width .3s;}
+  .goal-row .gr-segment.desayuno{background:color-mix(in srgb, var(--bar-base) 45%, var(--paper));}
+  .goal-row .gr-segment.comida{background:var(--bar-base);}
+  .goal-row .gr-segment.cena{background:color-mix(in srgb, var(--bar-base) 72%, var(--ink));}
+  .goal-row .gr-segment.entre_horas{background:var(--ink-soft);opacity:.65;}
+  .goal-row .gr-target-mark{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);z-index:3;box-shadow:0 0 0 1px var(--paper);}
+  .goal-row .gr-target-label{position:absolute;top:2px;font-size:8px;font-weight:800;color:var(--ink);z-index:4;transform:translateX(-50%);white-space:nowrap;text-shadow:0 1px 0 var(--paper);}
+  .goal-row .gr-slot-legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:9px;color:var(--ink-soft);}
+  .goal-row .gr-slot-legend i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;}
   .goal-empty{font-size:13px;color:var(--ink-soft);font-style:italic;}
   .goal-empty a{color:var(--mango-dark);cursor:pointer;}
+  .wr-delete{align-self:flex-end;margin-bottom:9px;flex-shrink:0;}
   /* --- date nav --- */
   .date-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;}
   .date-nav button{background:none;border:1.5px solid var(--ink);color:var(--ink);border-radius:3px;padding:6px 10px;font-family:inherit;cursor:pointer;font-size:16px;}
@@ -691,7 +695,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 2.0<br>
+    Versión 2.1<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -2252,32 +2256,27 @@ function semColorForRatio(value, target, toleranciaAbs){
   return ev.color;
 }
 function renderGoalRow(label, value, target, unit, bySlot, toleranciaAbs){
-  const pctMain = Math.min(100, (value/target)*100) || 0;
   const semColor = semColorForRatio(value, target, toleranciaAbs);
-  let marksHtml = '', labelsHtml = '', extraHtml = '';
+  const safeTarget = target || 1;
+  const total = bySlot ? ['desayuno','comida','cena','entre_horas'].reduce((s,k) => s + (bySlot[k]||0), 0) : value;
+  const scale = Math.max(safeTarget, total) * (total > safeTarget ? 1.12 : 1);
+  const targetPct = Math.min(100, safeTarget / scale * 100);
+  let segmentsHtml = '', legendHtml = '';
   if (bySlot){
-    let acc = 0;
-    const mainSlots = ['desayuno','comida','cena'];
-    mainSlots.forEach((slotKey, i) => {
-      if (i > 0) marksHtml += `<div class="gr-mark" style="left:${acc}%;"></div>`;
-      const share = SLOT_SHARE[slotKey] * 100;
-      labelsHtml += `<span class="gr-slot-label" style="left:${acc}%;width:${share}%;">${SLOT_LABELS[slotKey]}</span>`;
-      acc += share;
+    let left = 0;
+    ['desayuno','comida','cena','entre_horas'].forEach(slot => {
+      const slotVal = bySlot[slot] || 0;
+      const width = slotVal / scale * 100;
+      if (width > 0) segmentsHtml += `<div class="gr-segment ${slot}" style="left:${left}%;width:${width}%;--bar-base:${semColor};" title="${SLOT_LABELS[slot]}: ${Math.round(slotVal)}${unit}"></div>`;
+      left += width;
     });
-    const entreHorasVal = bySlot.entre_horas || 0;
-    const extraPct = entreHorasVal > 0 ? Math.min(100 - pctMain, (entreHorasVal/target)*100) : 0;
-    if (extraPct > 0) extraHtml = `<div class="gr-bar-extra" style="left:${pctMain}%;width:${extraPct}%;"></div>`;
+    legendHtml = `<div class="gr-slot-legend"><span><i style="background:color-mix(in srgb, ${semColor} 45%, var(--paper));"></i>Desayuno</span><span><i style="background:${semColor};"></i>Comida</span><span><i style="background:color-mix(in srgb, ${semColor} 72%, var(--ink));"></i>Cena</span><span><i style="background:var(--ink-soft);"></i>Entre horas</span></div>`;
+  } else {
+    segmentsHtml = `<div class="gr-segment comida" style="left:0;width:${total / scale * 100}%;--bar-base:${semColor};"></div>`;
   }
-  return `<div class="goal-row">
-    <div class="gr-top"><span class="gr-label">${label}</span><span class="gr-val">${Math.round(value)}${unit} / ${Math.round(target)}${unit}</span></div>
-    <div class="gr-bar">
-      <div class="gr-bar-fill" style="width:${pctMain}%;background:${semColor};"></div>
-      ${extraHtml}
-      ${bySlot ? marksHtml + labelsHtml : ''}
-    </div>
-  </div>`;
+  const exceso = total > safeTarget ? ` · +${Math.round(total-safeTarget)}${unit}` : '';
+  return `<div class="goal-row"><div class="gr-top"><span class="gr-label">${label}</span><span class="gr-val">${Math.round(value)}${unit} / ${Math.round(target)}${unit}${exceso}</span></div><div class="gr-bar">${segmentsHtml}<div class="gr-target-mark" style="left:${targetPct}%;"></div><span class="gr-target-label" style="left:${targetPct}%;">Objetivo</span></div>${bySlot ? legendHtml : ''}</div>`;
 }
-
 const MAIN_MEAL_SLOTS = ['desayuno','comida','cena'];
 function mainMealCoverage(dayMeals){
   const registered = MAIN_MEAL_SLOTS.filter(slot => dayMeals.some(m => m.slot === slot)).length;
@@ -2579,7 +2578,7 @@ function renderValoracion(totals, goalsEsperado, periodo, enCurso, objetivoUsuar
   });
 
   const avisoIncompleto = enCurso
-    ? `<p class="notes" style="margin-top:8px;">${periodo === 'día' ? 'El día aún está en curso' : 'Este periodo aún no ha terminado'} — puede que falten comidas por registrar. El objetivo de comparación está ajustado a lo transcurrido hasta ahora, no al total.</p>`
+    ? `<p class="notes" style="margin-top:8px;">${periodo === 'día' ? 'Faltan comidas principales por registrar o el día sigue en curso' : 'Este periodo tiene comidas principales sin registrar o aún no ha terminado'} — el objetivo de comparación se ajusta a las franjas anotadas, no al total completo.</p>`
     : '';
 
   return `
@@ -2617,6 +2616,11 @@ async function renderSemanaView(meals, exercises, goals){
   const weekCarb = dayData.reduce((a,d) => a+d.carb, 0);
   const weekGrasa = dayData.reduce((a,d) => a+d.grasa, 0);
   const weekFibra = dayData.reduce((a,d) => a+d.fibra, 0);
+  const nowForWeek = new Date();
+  const expectedWeekSlots = days.reduce((s,d) => s + expectedSlotsForDay(d, nowForWeek).length, 0);
+  const registeredWeekSlots = countLoggedExpectedSlots(days, meals);
+  const missingWeekSlots = Math.max(0, expectedWeekSlots - registeredWeekSlots);
+  const adjustedWeekGoal = goals ? goals.kcal / 3 * registeredWeekSlots : 0;
   const rangeLabel = `${monday.getDate()} ${MESES[monday.getMonth()].slice(0,3)} – ${addDays(monday,6).getDate()} ${MESES[addDays(monday,6).getMonth()].slice(0,3)}`;
   const progressEntry = await storageGet(`progress:${weekKey}`);
 
@@ -2649,6 +2653,7 @@ async function renderSemanaView(meals, exercises, goals){
       <div class="total-row"><span class="lbl">Total semana</span><span class="val">${Math.round(weekTotal)} kcal</span></div>
       <div class="stat-row"><span>Media diaria</span><span>${Math.round(weekTotal/7)} kcal</span></div>
       ${weekQuemado ? renderKcalBreakdown(weekTotal, weekQuemado) : ''}
+      <p class="notes" style="margin-top:10px;">${missingWeekSlots ? `Faltan ${missingWeekSlots} comida${missingWeekSlots===1?'':'s'} principal${missingWeekSlots===1?'':'es'} sin registrar; el objetivo semanal se ajusta a ${registeredWeekSlots} de ${expectedWeekSlots} franjas (${Math.round(adjustedWeekGoal)} kcal).` : `Las ${registeredWeekSlots} franjas principales esperadas están registradas.`}${weekQuemado ? ` Gasto registrado: ${Math.round(weekQuemado)} kcal.` : ' Sin gasto de ejercicio registrado.'}</p>
       <div class="wr-legend"><span><i style="background:var(--mango);"></i> Consumido neto</span><span><i style="background:var(--basil);"></i> Cubierto por ejercicio</span></div>
     </div>
     ${(() => {
