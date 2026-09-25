@@ -695,7 +695,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 2.1<br>
+    Versión 2.2<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1382,6 +1382,50 @@ function animateWizardStep(direction){
   box.classList.add(direction === 'next' ? 'wizard-page-next' : 'wizard-page-prev');
 }
 
+function openChangeIngredientModal(idx){
+  const item = manualItems[idx];
+  openModal(`
+    <div class="modal-head"><h3>Cambiar ingrediente</h3><button class="modal-close" id="chgClose">✕</button></div>
+    <p class="notes" style="margin:0 0 10px;">Escribe el alimento correcto. Mantendremos los ${item.gramos} g y actualizaremos sus kcal y macros.</p>
+    <div class="field"><label>Nuevo ingrediente</label><input type="text" id="chgNombre" value="${escapeHtml(item.nombre)}" placeholder="Ej. jamón cocido"></div>
+    <button class="primary" id="chgBuscarBtn">Buscar valores nutricionales</button>
+    <div id="chgStatus"></div>
+  `);
+  document.getElementById('chgClose').addEventListener('click', closeModal);
+  document.getElementById('chgBuscarBtn').addEventListener('click', async () => {
+    const nombre = document.getElementById('chgNombre').value.trim();
+    if (!nombre) return;
+    const btn = document.getElementById('chgBuscarBtn');
+    const status = document.getElementById('chgStatus');
+    btn.disabled = true;
+    status.innerHTML = `<div class="loading">Buscando datos de ${escapeHtml(nombre)}…<div class="bar"></div></div>`;
+    try{
+      const offResults = await offSearchByName(nombre);
+      let datos = offResults.find(p => p.kcal_100g > 0);
+      if (!datos){
+        const prompt = `Dame los valores nutricionales medios por 100 gramos de "${nombre}". Responde únicamente JSON válido, sin markdown, con esta estructura exacta: {"kcal_100g":0,"proteinas_100g":0,"carbohidratos_100g":0,"grasas_100g":0,"fibra_100g":0}`;
+        const respuesta = await geminiRequest([{text:prompt}]);
+        datos = parseJsonLoose(respuesta);
+      }
+      manualItems[idx] = {
+        ...item,
+        nombre,
+        kcal_100g: Number(datos.kcal_100g)||0,
+        proteinas_100g: Number(datos.proteinas_100g)||0,
+        carbohidratos_100g: Number(datos.carbohidratos_100g)||0,
+        grasas_100g: Number(datos.grasas_100g)||0,
+        fibra_100g: Number(datos.fibra_100g)||0
+      };
+      closeModal();
+      openWizardStep1();
+    }catch(err){
+      console.error(err);
+      status.innerHTML = `<div class="error">No se encontraron datos. Puedes corregirlos manualmente desde el desglose.</div>`;
+      btn.disabled = false;
+    }
+  });
+}
+
 function openWizardStep1(){
   const fotoPreview = (currentBase64 && preview && preview.src) ? preview.src : '';
   openModal(`
@@ -1391,7 +1435,7 @@ function openWizardStep1(){
     <div id="wrList">
       ${manualItems.length ? manualItems.map((i, idx) => `
         <div class="field-row" style="align-items:flex-end;">
-          <div class="field" style="flex:2;"><label>${escapeHtml(i.nombre)}</label></div>
+          <div class="field" style="flex:2;"><label>${escapeHtml(i.nombre)}</label><button type="button" class="small-ghost wr-change" data-idx="${idx}" style="margin-top:4px;">Cambiar</button></div>
           <div class="field" style="flex:1;"><label>Gramos</label><input type="number" data-idx="${idx}" class="wr-gramos-input" value="${i.gramos}" inputmode="decimal"></div>
           <button class="lr-del wr-delete" data-idx="${idx}" type="button" title="Quitar ingrediente">✕</button>
         </div>`).join('') : `<div class="empty-state">No quedan ingredientes. Vuelve a hacer la foto o ciérralo.</div>`}
@@ -1407,6 +1451,9 @@ function openWizardStep1(){
   });
   document.querySelectorAll('.wr-delete').forEach(btn => {
     btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx), 1); openWizardStep1(); });
+  });
+  document.querySelectorAll('.wr-change').forEach(btn => {
+    btn.addEventListener('click', () => openChangeIngredientModal(parseInt(btn.dataset.idx)));
   });
   document.getElementById('wrNextBtn').addEventListener('click', () => {
     if (manualItems.length) openWizardStep2('next');
