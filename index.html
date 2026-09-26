@@ -695,7 +695,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 2.2<br>
+    Versión 2.3<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1450,7 +1450,12 @@ function openWizardStep1(){
     });
   });
   document.querySelectorAll('.wr-delete').forEach(btn => {
-    btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx), 1); openWizardStep1(); });
+    btn.addEventListener('click', async () => {
+      const ok = await confirmModal('¿Quitar este ingrediente del análisis?');
+      if (!ok) return;
+      manualItems.splice(parseInt(btn.dataset.idx), 1);
+      openWizardStep1();
+    });
   });
   document.querySelectorAll('.wr-change').forEach(btn => {
     btn.addEventListener('click', () => openChangeIngredientModal(parseInt(btn.dataset.idx)));
@@ -1490,7 +1495,12 @@ function openWizardStep2(direction){
     row.addEventListener('click', () => openIngredientDetailModal(parseInt(row.dataset.idx)));
   });
   document.querySelectorAll('.w2-delete').forEach(btn => {
-    btn.addEventListener('click', () => { manualItems.splice(parseInt(btn.dataset.idx), 1); openWizardStep2(null); });
+    btn.addEventListener('click', async () => {
+      const ok = await confirmModal('¿Quitar este ingrediente del análisis?');
+      if (!ok) return;
+      manualItems.splice(parseInt(btn.dataset.idx), 1);
+      openWizardStep2(null);
+    });
   });
   document.getElementById('w2BackBtn').addEventListener('click', () => { openWizardStep1(); animateWizardStep('prev'); });
   document.getElementById('w2NextBtn').addEventListener('click', () => { if (manualItems.length) openWizardStep3('next'); });
@@ -1862,14 +1872,21 @@ function openEditMealIngredientsModal(mealKey){
             </div>
           </div>`).join('') : `<div class="empty-state">Sin ingredientes — el plato quedaría vacío.</div>`}
       </div>
+      <button class="ghost" id="emiAddIngBtn" style="margin-top:10px;width:100%;">+ Añadir ingrediente</button>
       <div class="total-row" style="margin-top:8px;"><span class="lbl">Total</span><span class="val">${Math.round(totals.kcal)} kcal</span></div>
       <button class="primary" id="emiSaveBtn" style="margin-top:10px;">Guardar cambios</button>
       <div id="emiStatus">${statusMsg}</div>
     `);
     document.getElementById('emiClose').addEventListener('click', closeModal);
     document.querySelectorAll('#emiList [data-action="remove"]').forEach(btn => {
-      btn.addEventListener('click', () => { items.splice(parseInt(btn.dataset.idx),1); render(); });
+      btn.addEventListener('click', async () => {
+        const ok = await confirmModal('¿Quitar este ingrediente del plato?');
+        if (!ok) return;
+        items.splice(parseInt(btn.dataset.idx),1);
+        render();
+      });
     });
+    document.getElementById('emiAddIngBtn').addEventListener('click', searchForEmiAdd);
     document.querySelectorAll('#emiList [data-action="edit"]').forEach(el => {
       el.addEventListener('click', () => openEditMealIngredientLineModal(parseInt(el.dataset.idx)));
     });
@@ -2330,6 +2347,36 @@ function mainMealCoverage(dayMeals){
   return registered / MAIN_MEAL_SLOTS.length;
 }
 
+function openMacroBreakdownModal(metric, meals){
+  const labels = { kcal:'Kcal', prot:'Proteína', carb:'Carbohidratos', grasa:'Grasas', fibra:'Fibra' };
+  const rows = [];
+  (meals||[]).forEach(meal => {
+    const foods = meal.alimentos || [];
+    const kcalTotal = foods.reduce((s,a) => s + (Number(a.kcal_estimadas)||0), 0) || Number(meal.total_kcal)||1;
+    foods.forEach(a => {
+      const kcal = Number(a.kcal_estimadas)||0;
+      const share = kcal / kcalTotal;
+      const value = metric === 'kcal' ? kcal : share * (
+        metric === 'prot' ? Number(meal.total_proteinas_g)||0 :
+        metric === 'carb' ? Number(meal.total_carbohidratos_g)||0 :
+        metric === 'grasa' ? Number(meal.total_grasas_g)||0 : Number(meal.total_fibra_g)||0
+      );
+      const existing = rows.find(r => r.nombre.toLowerCase() === String(a.nombre||'').toLowerCase());
+      if (existing) existing.value += value;
+      else rows.push({ nombre:a.nombre||'Ingrediente', value });
+    });
+  });
+  rows.sort((a,b) => b.value-a.value);
+  openModal(`
+    <div class="modal-head"><h3>Aporte de ${labels[metric]||metric}</h3><button class="modal-close" id="mbClose">✕</button></div>
+    <p class="notes" style="margin:0 0 10px;">Desglose aproximado a partir de los ingredientes registrados.</p>
+    ${rows.length ? rows.map(r => `<div class="stat-row"><span>${escapeHtml(r.nombre)}</span><span>${metric==='kcal'?Math.round(r.value)+' kcal':Math.round(r.value*10)/10+' g'}</span></div>`).join('') : `<div class="empty-state">No hay ingredientes desglosables en las comidas de este día.</div>`}
+    <button class="ghost" id="mbCloseBtn" style="margin-top:12px;width:100%;">Cerrar</button>
+  `);
+  document.getElementById('mbClose').addEventListener('click', closeModal);
+  document.getElementById('mbCloseBtn').addEventListener('click', closeModal);
+}
+
 function renderDiaView(meals, goals, exercises, stepsToday){
   const key = dateKey(diarioRefDate);
   const dayMeals = meals.filter(m => dateKey(new Date(m.timestamp)) === key);
@@ -2441,6 +2488,15 @@ function renderDiaView(meals, goals, exercises, stepsToday){
       ) : '';
     })()}
   `;
+  const goalRows = diarioContent.querySelectorAll('.goal-box .goal-row');
+  ['kcal','prot','carb','grasa','fibra'].forEach((metric, idx) => {
+    const row = goalRows[idx];
+    if (row){
+      row.style.cursor = 'pointer';
+      row.title = 'Toca para ver el desglose';
+      row.addEventListener('click', () => openMacroBreakdownModal(metric, dayMeals));
+    }
+  });
   document.getElementById('dPrev').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,-1); refreshDiario(); });
   document.getElementById('dNext').addEventListener('click', () => { diarioRefDate = addDays(diarioRefDate,1); refreshDiario(); });
   const gotoDatos = diarioContent.querySelector('[data-action="goto-datos"]');
@@ -2867,6 +2923,31 @@ function openDayDetailModal(k, meals, exercises){
    ============================================================ */
 const platosList = document.getElementById('platosList');
 document.getElementById('platosSearch').addEventListener('input', refreshPlatos);
+
+async function searchForEmiAdd(){
+  openModal(`
+    <div class="modal-head"><h3>Añadir ingrediente</h3><button class="modal-close" id="eaiClose">✕</button></div>
+    <div class="field"><label>Buscar en tus productos y Open Food Facts</label><input type="text" id="eaiInput" placeholder="Ej. jamón cocido, queso…"></div>
+    <button class="primary" id="eaiSearchBtn">Buscar</button>
+    <div id="eaiResults" style="margin-top:10px;"></div>
+  `);
+  document.getElementById('eaiClose').addEventListener('click', closeModal);
+  const doSearch=async()=>{
+    const q=document.getElementById('eaiInput').value.trim(); if(!q)return;
+    const el=document.getElementById('eaiResults'); el.innerHTML='<div class="loading">Buscando…</div>';
+    const own=await loadAllIngredients(); const low=q.toLowerCase();
+    const ownMatches=own.filter(i=>(i.nombre||'').toLowerCase().includes(low)).map(i=>({...i,propio:true}));
+    const results=[...ownMatches,...await offSearchByName(q)];
+    el.innerHTML=results.map((r,i)=>`<div class="picker-row" data-i="${i}">${escapeHtml(r.nombre)}<span>${r.kcal_100g} kcal</span></div>`).join('')||'<div class="empty-state">Sin resultados.</div>';
+    el.querySelectorAll('.picker-row').forEach(row=>row.addEventListener('click',()=>{
+      const r=results[parseInt(row.dataset.i)];
+      items.push({nombre:r.nombre,gramos:100,kcal_100g:r.kcal_100g||0,proteinas_100g:r.proteinas_100g||0,carbohidratos_100g:r.carbohidratos_100g||0,grasas_100g:r.grasas_100g||0,fibra_100g:r.fibra_100g||0});
+      closeModal(); render();
+    }));
+  };
+  document.getElementById('eaiSearchBtn').addEventListener('click',doSearch);
+  document.getElementById('eaiInput').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+}
 
 async function refreshPlatos(){
   const meals = await loadAllMeals();
