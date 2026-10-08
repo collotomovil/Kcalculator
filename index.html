@@ -537,11 +537,33 @@
     </div>
 
     <div class="card" id="textCard" hidden>
-      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:18px;">Describe tu plato con IA (opcional)</h4>
-      <div class="field"><label>¿Qué has comido?</label><textarea id="textDescInput" placeholder="Ej. un plato hondo de arroz con pollo guisado y un poco de aceite"></textarea></div>
-      <button class="primary" id="textAnalyzeBtn">Calcular con IA</button>
-      <div class="loading" id="textLoadingWrap" hidden>Estimando alimentos y nutrientes…<div class="bar"></div></div>
-      <p class="notes" style="margin-top:10px;">O, si prefieres, añade los ingredientes uno a uno justo debajo, sin necesidad de IA.</p>
+      <h4 style="margin:0 0 10px;font-family:var(--font-display);font-size:18px;">Describe tu plato</h4>
+      <div class="pill-group" id="textModePills">
+        <button type="button" class="pill active" data-mode="ia">Con IA</button>
+        <button type="button" class="pill" data-mode="manual">Sin IA</button>
+      </div>
+      <div id="textIaWrap">
+        <div class="field"><label>¿Qué has comido?</label><textarea id="textDescInput" placeholder="Ej. un plato hondo de arroz con pollo guisado y un poco de aceite"></textarea></div>
+        <button class="primary" id="textAnalyzeBtn">Calcular con IA</button>
+        <div class="loading" id="textLoadingWrap" hidden>Estimando alimentos y nutrientes…<div class="bar"></div></div>
+      </div>
+      <div id="textManualWrap" hidden>
+        <p class="notes">Escribe los datos que conozcas. No se usará IA.</p>
+        <div class="field"><label>Nombre del plato</label><input type="text" id="manualDishName" placeholder="Ej. Sándwich de jamón"></div>
+        <div class="field-row">
+          <div class="field"><label>Kcal totales</label><input type="number" id="manualDishKcal" inputmode="decimal"></div>
+          <div class="field"><label>Peso total (g)</label><input type="number" id="manualDishGramos" value="100" inputmode="decimal"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Proteína (g)</label><input type="number" id="manualDishProt" inputmode="decimal"></div>
+          <div class="field"><label>Carbos (g)</label><input type="number" id="manualDishCarb" inputmode="decimal"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Grasas (g)</label><input type="number" id="manualDishGrasa" inputmode="decimal"></div>
+          <div class="field"><label>Fibra (g)</label><input type="number" id="manualDishFibra" inputmode="decimal"></div>
+        </div>
+        <button class="primary" id="manualDishContinue">Continuar sin IA</button>
+      </div>
     </div>
 
     <div class="card" id="itemsCard" hidden>
@@ -695,7 +717,7 @@
   </div>
 
   <div style="text-align:center;margin-top:30px;font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-soft);opacity:.7;line-height:1.6;">
-    Versión 2.3<br>
+    Versión 2.4<br>
     Aplicación creada por Pisapraos
   </div>
 
@@ -1761,6 +1783,35 @@ async function buildCalibrationParts(){
   return { parts, hint };
 }
 
+document.getElementById('textModePills').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pill');
+  if (!btn) return;
+  document.querySelectorAll('#textModePills .pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('textIaWrap').hidden = btn.dataset.mode !== 'ia';
+  document.getElementById('textManualWrap').hidden = btn.dataset.mode !== 'manual';
+});
+
+document.getElementById('manualDishContinue').addEventListener('click', () => {
+  const nombre = document.getElementById('manualDishName').value.trim();
+  const kcal = parseFloat(document.getElementById('manualDishKcal').value) || 0;
+  const gramos = parseFloat(document.getElementById('manualDishGramos').value) || 100;
+  if (!nombre || !kcal){ alert('Escribe al menos nombre y kcal totales.'); return; }
+  const factor = 100 / gramos;
+  manualItems = [{
+    nombre, gramos,
+    kcal_100g: kcal * factor,
+    proteinas_100g: (parseFloat(document.getElementById('manualDishProt').value) || 0) * factor,
+    carbohidratos_100g: (parseFloat(document.getElementById('manualDishCarb').value) || 0) * factor,
+    grasas_100g: (parseFloat(document.getElementById('manualDishGrasa').value) || 0) * factor,
+    fibra_100g: (parseFloat(document.getElementById('manualDishFibra').value) || 0) * factor
+  }];
+  analysisMeta = { vitaminas_destacadas: [], confianza: 'manual', notas: 'Plato introducido sin IA.' };
+  lastAnalysisSource = 'manual';
+  lastAnalysisGramosOriginal = gramos;
+  openWizardStep1();
+});
+
 document.getElementById('textAnalyzeBtn').addEventListener('click', async () => {
   const desc = document.getElementById('textDescInput').value.trim();
   if (!desc) return;
@@ -1797,6 +1848,12 @@ let lastAnalysisGramosOriginal = 0;
 
 let currentCalcMode = 'foto';
 
+function placeCalibHint(){
+  const hint = document.getElementById('calibHintBtn');
+  const target = currentCalcMode === 'foto' ? captureCard : currentCalcMode === 'repetir' ? repeatCard : textCard;
+  if (hint && target) target.insertAdjacentElement('afterend', hint);
+}
+
 calcModeToggle.addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -1810,10 +1867,12 @@ calcModeToggle.addEventListener('click', (e) => {
   resultCard.hidden = true;
   errorWrapCalc.innerHTML = '';
   if (currentCalcMode === 'repetir') renderRepeatList();
+  placeCalibHint();
 });
 
 document.getElementById('repeatSearchInput').addEventListener('input', renderRepeatList);
 document.getElementById('repeatSort').addEventListener('change', renderRepeatList);
+placeCalibHint();
 
 function parseGramsFromText(text){
   const m = String(text || '').match(/[\d.,]+/);
