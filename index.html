@@ -800,6 +800,58 @@ function defaultDishName(alimentos){
 }
 
 /* --- llamada a Gemini (gratis, clave propia) --- */
+const geminiCache = new Map();
+
+function geminiCacheKey(parts){
+  try { return JSON.stringify(parts); } catch(e){ return String(Date.now()); }
+}
+
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function geminiCallModel(model, parts, settings){
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.2, maxOutputTokens: 1200 } })
+  });
+  let data = {};
+  try { data = await response.json(); } catch(e){}
+  if (!response.ok || data.error){
+    const err = new Error((data.error && data.error.message) || `Error HTTP ${response.status} de Gemini.`);
+    err.status = (data.error && data.error.code) || response.status;
+    throw err;
+  }
+  const candidate = data.candidates && data.candidates[0];
+  const text = candidate && candidate.content && candidate.content.parts ? candidate.content.parts.map(p => p.text || '').join('\n') : '';
+  if (!text) throw new Error('Respuesta vacía de Gemini.');
+  return text;
+}
+
+async function geminiRequest(parts){
+  const settings = await getSettings();
+  if (!settings.geminiKey) throw new Error('Añade tu clave gratuita de Gemini en Ajustes (⚙, arriba) para usar el reconocimiento por foto.');
+  const key = geminiCacheKey(parts);
+  if (geminiCache.has(key)) return geminiCache.get(key);
+  const preferred = settings.geminiModel || 'gemini-3.6-flash';
+  const models = [...new Set([preferred, 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'])];
+  for (const model of models){
+    for (let attempt = 0; attempt < 2; attempt++){
+      try{
+        const text = await geminiCallModel(model, parts, settings);
+        geminiCache.set(key, text);
+        return text;
+      }catch(err){
+        const retryable = [429, 500, 503, 504].includes(Number(err.status));
+        if (retryable && attempt === 0){
+          await sleep(1500 + Math.random() * 1500);
+          continue;
+        }
+        break;
+      }
+    }
+  }
+  throw new Error('Gemini está saturado o no disponible ahora mismo. Prueba de nuevo en unos segundos o usa “Sin IA” / añade ingredientes manualmente.');
+}
 const aiCache = new Map();
 
 function aiCacheKey(parts){
@@ -809,14 +861,14 @@ function aiCacheKey(parts){
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
 function getActiveProviders(settings, hasImage){
-  const order=['gemini','groq','openrouter'];
+  const order = hasImage ? ['gemini','openrouter'] : ['gemini','groq','openrouter'];
   if(settings.preferredProvider && order.includes(settings.preferredProvider)){
     order.splice(order.indexOf(settings.preferredProvider),1);
     order.unshift(settings.preferredProvider);
   }
   return order.filter(p=>{
     if(p==='gemini') return settings.geminiKey;
-    if(p==='groq') return settings.groqKey && !hasImage;
+    if(p==='groq') return settings.groqKey;
     if(p==='openrouter') return settings.openrouterKey;
     return false;
   });
@@ -844,7 +896,7 @@ async function callGemini(parts,settings){
 }
 
 async function callGroq(prompt,settings){
-  const model=settings.groqModel||'llama-3.3-70b-versatile';
+  const model=settings.groqModel||'openai/gpt-oss-20b';
   const response=await fetch('https://api.groq.com/openai/v1/chat/completions',{
     method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${settings.groqKey}`},
     body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,max_tokens:1200})
@@ -1032,7 +1084,7 @@ async function getSettings(){
   const s = await storageGet('settings:app');
   return Object.assign({
     geminiKey:'', geminiModel:'gemini-3.6-flash',
-    groqKey:'', groqModel:'llama-3.3-70b-versatile',
+    groqKey:'', groqModel:'openai/gpt-oss-20b',
     openrouterKey:'', openrouterModel:'openrouter/free',
     preferredProvider:''
   }, s || {});
@@ -3874,24 +3926,24 @@ async function openSettingsModal(focusId){
   const s = await getSettings();
   openModal(`
     <div class="modal-head"><h3>Ajustes</h3><button class="modal-close" id="sClose">✕</button></div>
-    <div class="notes" style="margin-bottom:10px;">Configura uno o varios motores gratuitos. Para foto y descripción se probarán en este orden: Gemini → Groq → OpenRouter. Si uno falla o está saturado, la app saltará automáticamente al siguiente.</div>
+    <div class="notes" style="margin-bottom:10px;">Configura uno o varios motores gratuitos. Para foto: Gemini → OpenRouter. Para descripción: Gemini → Groq → OpenRouter. Si uno falla, la app saltará automáticamente al siguiente.</div>
     <div class="ai-card">
       <h4>Google Gemini</h4>
-      <p class="notes">Principal y recomendado: admite fotos y descripciones. Crea una clave gratuita en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+      <p class="notes">Principal y recomendado para fotos y descripciones. Crea una clave gratuita en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
       <div class="field"><label>Clave API</label><input type="password" id="sGeminiKey" value="${escapeHtml(s.geminiKey||'')}" placeholder="AIza…"></div>
       <div class="field"><label>Modelo</label><input type="text" id="sGeminiModel" value="${escapeHtml(s.geminiModel||'gemini-3.6-flash')}"></div>
       <button class="ghost ai-test" data-provider="gemini">Probar conexión</button>
     </div>
     <div class="ai-card">
       <h4>Groq</h4>
-      <p class="notes">Respaldo gratuito para descripciones escritas. Crea una clave gratuita en <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq Console</a>. No se usa para analizar fotos.</p>
+      <p class="notes">Respaldo gratuito solo para descripciones escritas. Crea una clave en <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq Console</a>.</p>
       <div class="field"><label>Clave API</label><input type="password" id="sGroqKey" value="${escapeHtml(s.groqKey||'')}" placeholder="gsk_…"></div>
-      <div class="field"><label>Modelo</label><input type="text" id="sGroqModel" value="${escapeHtml(s.groqModel||'llama-3.3-70b-versatile')}"></div>
+      <div class="field"><label>Modelo</label><input type="text" id="sGroqModel" value="${escapeHtml(s.groqModel||'openai/gpt-oss-20b')}"></div>
       <button class="ghost ai-test" data-provider="groq">Probar conexión</button>
     </div>
     <div class="ai-card">
       <h4>OpenRouter</h4>
-      <p class="notes">Segundo respaldo gratuito. Crea una clave en <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">OpenRouter Keys</a>. Para descripciones usa un modelo con sufijo <b>:free</b>; para fotos, solo si eliges un modelo gratuito que admita visión.</p>
+      <p class="notes">Respaldo gratuito. Crea una clave en <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">OpenRouter Keys</a>. Para fotos, usa un modelo gratuito que admita visión; para descripciones, un modelo con sufijo <b>:free</b>.</p>
       <div class="field"><label>Clave API</label><input type="password" id="sOpenrouterKey" value="${escapeHtml(s.openrouterKey||'')}" placeholder="sk-or-…"></div>
       <div class="field"><label>Modelo</label><input type="text" id="sOpenrouterModel" value="${escapeHtml(s.openrouterModel||'openrouter/free')}"></div>
       <button class="ghost ai-test" data-provider="openrouter">Probar conexión</button>
@@ -3923,7 +3975,7 @@ async function openSettingsModal(focusId){
       geminiKey: document.getElementById('sGeminiKey').value.trim(),
       geminiModel: document.getElementById('sGeminiModel').value.trim() || 'gemini-3.6-flash',
       groqKey: document.getElementById('sGroqKey').value.trim(),
-      groqModel: document.getElementById('sGroqModel').value.trim() || 'llama-3.3-70b-versatile',
+      groqModel: document.getElementById('sGroqModel').value.trim() || 'openai/gpt-oss-20b',
       openrouterKey: document.getElementById('sOpenrouterKey').value.trim(),
       openrouterModel: document.getElementById('sOpenrouterModel').value.trim() || 'openrouter/free'
     });
